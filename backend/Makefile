@@ -121,8 +121,8 @@ ifeq ($(PYTHON_FILES),)
 	$(error No Python files found!!)
 endif
 	rm -f bundle.zip
-	zip $(PWD)/$@ requirements.txt
-	zip $(PWD)/$@ $(PYTHON_FILES)
+	zip "$(PWD)/$@" requirements.txt
+	zip "$(PWD)/$@" $(PYTHON_FILES)
 
 deploy: bundle
 ifeq ($(IXON_API_COMPANY_ID),)

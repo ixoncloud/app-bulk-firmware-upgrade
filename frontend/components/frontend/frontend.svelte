@@ -28,9 +28,6 @@
     const response = await client.call("functions.installFirmware");
     result = JSON.stringify(response, null, 2);
   }
-  function handleClick() {
-    alert("no more alerts");
-  }
 </script>
 
 <main>
@@ -44,12 +41,27 @@
           >
         {/each}
       </select>
-      <button on:click={installFirmware} type="button"> Install </button>
+      <button class="install" on:click={installFirmware} type="button">
+        Install on all devices
+      </button>
     </div>
-    <h1>Selected firmware: {selected_firmware}</h1>
+    <!-- <h1>Selected firmware: {selected_firmware}</h1>
     <br />
     <textarea bind:value={eligible_agents} rows="20" cols="120" />
-    <h1>{JSON.stringify(response)}</h1>
-    <button on:click|once={handleClick}> Click me </button>
+    <h1>{JSON.stringify(response)}</h1> -->
   </form>
 </main>
+
+<style>
+  main {
+    padding: 0.6rem;
+  }
+
+  /* div {
+    display: inline;
+  } */
+
+  button {
+    float: right;
+  }
+</style>
