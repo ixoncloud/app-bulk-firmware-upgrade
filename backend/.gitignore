@@ -1,0 +1,6 @@
+__pycache__
+venv
+
+.accesstoken
+.env
+bundle.zip

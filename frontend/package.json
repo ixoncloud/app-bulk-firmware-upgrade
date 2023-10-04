@@ -1,0 +1,24 @@
+{
+  "name": "ixon-custom-component-workspace",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "cdk build",
+    "deploy": "cdk deploy",
+    "generate": "cdk generate",
+    "login": "cdk login",
+    "logout": "cdk logout",
+    "publish": "cdk publish",
+    "simulate": "cdk simulate"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@ixon-cdk/core": "^1.2.0",
+    "@ixon-cdk/runner": "^1.2.0",
+    "@ixon-cdk/simulator": "^1.2.0",
+    "@ixon-cdk/svelte-builder": "^1.2.0",
+    "@ixon-cdk/templates": "^1.2.0"
+  }
+}
