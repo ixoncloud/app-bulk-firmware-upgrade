@@ -4,14 +4,18 @@
   export let context;
   export let client;
   export let response;
-  export let firmware_versions = [];
-  export let selected_firmware;
-  export let eligible_agents;
+  export let firmwareVersions = [];
+  export let selectedFirmware;
+  export let eligibleAgents;
+  export let disableInstall = true;
+  export let installButtonText = "Select a firmware version";
+  export let disableFirmwareSelect = false;
+  export let upgradesAllStarted = false;
 
   onMount(async () => {
     client = context.createBackendComponentClient();
     response = await client.call("functions.getFirmwareVersions");
-    firmware_versions = response.data;
+    firmwareVersions = response.data;
   });
 
   async function getFirmwareVersions() {
@@ -20,13 +24,24 @@
   }
   async function selectVersionAndGetRouters() {
     const response = await client.call("functions.selectVersionAndGetRouters", {
-      version: selected_firmware,
+      version: selectedFirmware,
     });
-    eligible_agents = JSON.stringify(response.data, null, 2);
+    upgradesAllStarted = false;
+    eligibleAgents = JSON.stringify(response.data, null, 2);
+    // {#if $eligibleAgents === '[]'}
+    //   installButtonText = "No eligible devices found";
+    //   disableInstall = false;
+    // {/if}
+    disableInstall = false;
+    installButtonText = "Upgrade all devices";
   }
   async function installFirmware() {
     const response = await client.call("functions.installFirmware");
-    result = JSON.stringify(response, null, 2);
+    upgradesAllStarted = response.data;
+    // result = JSON.stringify(response, null, 2);
+    disableInstall = true;
+    disableFirmwareSelect = true;
+    installButtonText = "Starting all upgrades";
   }
 </script>
 
@@ -34,21 +49,28 @@
   <form>
     <div>
       Select firmware:
-      <select bind:value={selected_firmware}>
-        {#each firmware_versions as firmware_version}
-          <option on:click={selectVersionAndGetRouters} value={firmware_version}
-            >{firmware_version}</option
+      <select disabled={disableFirmwareSelect} bind:value={selectedFirmware}>
+        {#each firmwareVersions as firmwareVersion}
+          <option on:click={selectVersionAndGetRouters} value={firmwareVersion}
+            >{firmwareVersion}</option
           >
         {/each}
       </select>
-      <button class="install" on:click={installFirmware} type="button">
-        Install on all devices
+      <button
+        disabled={disableInstall}
+        class="installButton"
+        on:click={installFirmware}
+        type="button"
+      >
+        {installButtonText}
       </button>
     </div>
-    <!-- <h1>Selected firmware: {selected_firmware}</h1>
+    <p>Disabled: {disableInstall}</p>
+    <p>Response: {upgradesAllStarted}</p>
+    <h1>Selected firmware: {selectedFirmware}</h1>
     <br />
-    <textarea bind:value={eligible_agents} rows="20" cols="120" />
-    <h1>{JSON.stringify(response)}</h1> -->
+    <textarea bind:value={eligibleAgents} rows="20" cols="120" />
+    <h1>{JSON.stringify(response)}</h1>
   </form>
 </main>
 
@@ -61,7 +83,8 @@
     display: inline;
   } */
 
-  button {
+  .installButton {
     float: right;
+    width: 200px;
   }
 </style>
