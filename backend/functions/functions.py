@@ -3,13 +3,11 @@ from packaging.version import parse as parseVersion
 
 
 @CbcContext.expose
-# **kwargs, key word arguments die niet defined is
 def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
-    del kwargs
-    # Get all firmware versions
-    global firmware_list
+    del kwargs # Removes non-defined key word arguments
     firmware_list = []
-    firmware_version_list = []
+    firmware_list_sorted = []
+    firmware_version_list_sorted = []
     response = context.api_client.get('AgentTypeList', query={'fields': 'publicId,name'})
     agent_types = response['data']
     agents = ['IXrouter2', 'IXrouter3']
@@ -22,29 +20,23 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
         ixrouter_firmware_versions = response['data']
         for ixrouter_firmware_version in ixrouter_firmware_versions:
             firmware_list.append({'agent_type_name': agent, 'agent_type_publicId': ixrouter_pubid,'publicId': ixrouter_firmware_version['publicId'], 'version': ixrouter_firmware_version['code'], 'note': ixrouter_firmware_version['notes']})
-    for firmware in firmware_list:  # Make a list of version numbers only
-        firmware_version_list.append(firmware['version'])
+    for firmware in firmware_list:  # Make a list of version numbers only to enable natural sorting
+        firmware_version_list_sorted.append(firmware['version'])
     # Sort version numbers naturally
-    firmware_version_list.sort(key=parseVersion, reverse=True)
-    return (firmware_version_list)
+    firmware_version_list_sorted.sort(key=parseVersion, reverse=True)
+    # Create a sorted list of dictionaries of each version
+    for firmware_version in firmware_version_list_sorted:
+        # Find this firmware version's publicId and agent type publicId
+        for firmware in firmware_list:
+            if firmware['version'] == firmware_version:
+                firmware_list_sorted.append({'version': firmware['version'],'publicId':firmware['publicId'],'agent_type_publicId':firmware['agent_type_publicId']})
+    return (firmware_list_sorted)
 
 
 @CbcContext.expose
-# **kwargs, key word arguments die niet defined is
-def selectVersionAndGetRouters(context: CbcContext, version, **kwargs: dict[str, str]):
-    del kwargs
-    # if firmware_list == []: # If firmware_list is empty for whatever reason, repeat the above function
-    #   getFirmwareVersions(context)
-    # Find publicId for selected firmware
-    firmware = next(
-        (item for item in firmware_list if item['version'] == version), None)
-    # Get a list of agents that have an active MQTT connection and are not running the latest firmware version\
-    global agent_list
-    global target_firmware_version
-    global target_firmware_publicid
+def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str, str]):
+    del kwargs # Removes non-defined key word arguments
     agent_list = []
-    target_firmware_version = firmware['version']
-    target_firmware_publicid = firmware['publicId']
     more_after = None
     all_agents_checked = False
     while all_agents_checked == False:
@@ -76,18 +68,17 @@ def selectVersionAndGetRouters(context: CbcContext, version, **kwargs: dict[str,
 
 
 @CbcContext.expose
-# **kwargs, key word arguments die niet defined is
-def installFirmware(context: CbcContext, **kwargs: dict[str, str]):
-    del kwargs
+def installFirmware(context: CbcContext, firmware, agents, **kwargs: dict[str, str]):
+    del kwargs # Removes non-defined key word arguments
     # Upgrade all to latest version
-    for agent in agent_list:
+    for agent in agents:
         print('{} {} ({})'.format('Upgrading',
               agent['name'], agent['publicId']))
-        response = context.api_client.post('AgentFirmwareUpgrade', url_args={'agentId': agent['publicId']}, data={'file': {'publicId': target_firmware_publicid}})
+        response = context.api_client.post('AgentFirmwareUpgrade', url_args={'agentId': agent['publicId']}, data={'file': {'publicId': firmware['publicId']}})
         # if response['status'] == 'error':
         #     response_message = ''.join(response['data'][0]['message'])
         #     print('{} {}'.format('Failed to start upgrade:', response_message))
         # else:
-        #     print('{} {} {} {}'.format('Successfully started upgrade from',agent['firmware'], 'to', target_firmware_version))
+        #     print('{} {} {} {}'.format('Successfully started upgrade from',agent['firmware'], 'to', firmware['version']))
     print('Upgrades ALL started')
     return True
