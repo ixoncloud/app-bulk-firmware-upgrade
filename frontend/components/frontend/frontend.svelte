@@ -23,6 +23,8 @@
   });
 
   async function selectVersionAndGetRouters() {
+    disableStartUpgrade = true;
+    startUpgradeButtonText = "Searching for eligible devices";
     const response = await client.call("functions.selectVersionAndGetRouters", {
       firmware: selectedFirmware,
     });
@@ -41,10 +43,13 @@
     disableFirmwareSelect = true;
     disableStartUpgrade = true;
     startUpgradeButtonText = "Starting all device upgrades";
+    console.log(selectedFirmware);
+    console.log(eligibleAgents);
     const response = await client.call("functions.startFirmwareUpgrade", {
       firmware: selectedFirmware,
       agents: eligibleAgents,
     });
+    console.log(response);
     upgradesAllStarted = response.data;
     // result = JSON.stringify(response, null, 2);
     if (upgradesAllStarted) {

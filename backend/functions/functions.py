@@ -64,7 +64,7 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
 
 
 @CbcContext.expose
-def installFirmware(context: CbcContext, firmware, agents, **kwargs: dict[str, str]):
+def startFirmwareUpgrade(context: CbcContext, firmware, agents, **kwargs: dict[str, str]):
     del kwargs # Removes non-defined key word arguments
     # Upgrade all to latest version
     for agent in agents:
