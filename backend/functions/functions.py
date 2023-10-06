@@ -58,13 +58,9 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
     # List all devices
     agent_list.sort(key=lambda i: i['name'])
     if not agent_list:
-        print('No IXrouters online for a firmware upgrade')
         return ([])
     else:
-        print('IXrouters that are online for a firmware upgrade')
-        for agent in agent_list:
-            print('- {} ({}) ({})'.format(agent['name'], agent['publicId'], agent['firmware']))
-    return (agent_list)
+        return (agent_list)
 
 
 @CbcContext.expose

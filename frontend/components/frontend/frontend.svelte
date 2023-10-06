@@ -8,19 +8,18 @@
 
   let firmwareList = [];
   let selectedFirmware;
-  let selectedFirmware_string;
   let eligibleAgents;
-  let eligibleAgents_string;
 
   let disableFirmwareSelect = false;
-  let disableInstall = true;
-  let installButtonText = "Select a firmware version";
+  let disableStartUpgrade = true;
+  let startUpgradeButtonText = "Select a firmware version";
   let upgradesAllStarted;
 
   onMount(async () => {
     client = context.createBackendComponentClient();
     response = await client.call("functions.getFirmwareVersions");
     firmwareList = response.data;
+    console.log(firmwareList);
   });
 
   async function selectVersionAndGetRouters() {
@@ -28,22 +27,21 @@
       firmware: selectedFirmware,
     });
     eligibleAgents = response.data;
-    eligibleAgents_string = JSON.stringify(response.data, null, 2);
-    selectedFirmware_string = JSON.stringify(selectedFirmware, null, 2);
+    console.log(eligibleAgents);
     upgradesAllStarted = false; // Reset value
     if (eligibleAgents === "[]") {
-      disableInstall = true;
-      installButtonText = "No eligible devices found";
+      disableStartUpgrade = true;
+      startUpgradeButtonText = "No eligible devices found";
     } else {
-      disableInstall = false;
-      installButtonText = "Upgrade all eligible devices";
+      disableStartUpgrade = false;
+      startUpgradeButtonText = "Upgrade all eligible devices";
     }
   }
-  async function installFirmware() {
+  async function startFirmwareUpgrade() {
     disableFirmwareSelect = true;
-    disableInstall = true;
-    installButtonText = "Starting all device upgrades";
-    const response = await client.call("functions.installFirmware", {
+    disableStartUpgrade = true;
+    startUpgradeButtonText = "Starting all device upgrades";
+    const response = await client.call("functions.startFirmwareUpgrade", {
       firmware: selectedFirmware,
       agents: eligibleAgents,
     });
@@ -51,8 +49,8 @@
     // result = JSON.stringify(response, null, 2);
     if (upgradesAllStarted) {
       disableFirmwareSelect = false;
-      disableInstall = true;
-      installButtonText = "All device upgrades started";
+      disableStartUpgrade = true;
+      startUpgradeButtonText = "All device upgrades started";
     }
   }
 </script>
@@ -69,20 +67,14 @@
         {/each}
       </select>
       <button
-        disabled={disableInstall}
-        class="installButton"
-        on:click={installFirmware}
+        disabled={disableStartUpgrade}
+        class="startUpgradeButton"
+        on:click={startFirmwareUpgrade}
         type="button"
       >
-        {installButtonText}
+        {startUpgradeButtonText}
       </button>
     </div>
-    <p>Disabled: {disableInstall}</p>
-    <p>Response: {upgradesAllStarted}</p>
-    <h1>Selected firmware: {selectedFirmware_string}</h1>
-    <br />
-    <textarea bind:value={eligibleAgents_string} rows="10" cols="100" />
-    <h1>{JSON.stringify(response)}</h1>
   </form>
 </main>
 
@@ -91,11 +83,7 @@
     padding: 0.6rem;
   }
 
-  /* div {
-    display: inline;
-  } */
-
-  .installButton {
+  .startUpgradeButton {
     float: right;
     width: 200px;
   }
