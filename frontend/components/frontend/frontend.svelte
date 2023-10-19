@@ -8,22 +8,41 @@
 
   let firmwareList = [];
   let selectedFirmware;
-  let eligibleAgents;
+  let eligibleAgents = [];
 
   let selectFirmwareButtonText = "Select target firmware";
   let selectFirmwareButtonTextShort = "Select firmware";
-
   let disableFirmwareSelect = false;
+
+  const upgradeBatchSize = 50;
+  let eligibleAgentsBatch;
   let disableStartUpgrade = true;
+  let startingAllUpgrades = false;
   let startUpgradeButtonText = "No eligible devices found";
   let startUpgradeButtonTextShort = "No devices found";
+  let startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
   let upgradesAllStarted;
 
   let rootEl: HTMLElement;
   let width: number | null = null;
   $: isNarrow = width !== null ? width <= 460 : false;
 
+  $: if (selectedFirmware) {
+    console.log(selectedFirmware);
+    if (selectedFirmware.allowed) {
+      selectVersionAndGetRouters();
+    } else {
+      informFirmwareNotAvailable(
+        selectedFirmware["version"],
+        selectedFirmware["days_remaining"]
+      );
+    }
+  }
+
   onMount(async () => {
+    disableFirmwareSelect = true;
+    selectFirmwareButtonText = "Searching firmware...";
+    selectFirmwareButtonTextShort = "Searching firmware...";
     width = rootEl.getBoundingClientRect().width;
     const resizeObserver = new ResizeObserver((entries) => {
       entries.forEach((entry) => {
@@ -36,6 +55,9 @@
     response = await client.call("functions.getFirmwareVersions");
     firmwareList = response.data;
     console.log(firmwareList);
+    disableFirmwareSelect = false;
+    selectFirmwareButtonText = "Select target firmware";
+    selectFirmwareButtonTextShort = "Select firmware";
 
     return () => {
       resizeObserver.unobserve(rootEl);
@@ -46,6 +68,7 @@
     disableStartUpgrade = true;
     startUpgradeButtonText = "Searching for eligible devices";
     startUpgradeButtonTextShort = "Searching devices";
+    startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
     const response = await client.call("functions.selectVersionAndGetRouters", {
       firmware: selectedFirmware,
     });
@@ -56,112 +79,151 @@
       disableStartUpgrade = true;
       startUpgradeButtonText = "No eligible devices found";
       startUpgradeButtonTextShort = "No devices found";
+      startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
     } else {
       disableStartUpgrade = false;
-      startUpgradeButtonText = "Upgrade all eligible devices";
-      startUpgradeButtonTextShort = "Upgrade all devices";
+      startUpgradeButtonText =
+        "Upgrade all devices (" + eligibleAgents.length + ")";
+      startUpgradeButtonTextShort =
+        "Upgrade all devices (" + eligibleAgents.length + ")";
+      startUpgradeButtonStyle = "startUpgradeButtonStyleEnabled";
     }
   }
+
+  async function informFirmwareNotAvailable(
+    selectedUnavailableFirmware,
+    availableInDays
+  ): Promise<void> {
+    disableStartUpgrade = true;
+    startUpgradeButtonText = "No eligible devices found";
+    startUpgradeButtonTextShort = "No devices found";
+    startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
+    selectedFirmware = "";
+    const result = await context.openAlertDialog({
+      title: "Available soon",
+      message:
+        "Firmware versions become available for Bulk Firmware Upgrade 2 weeks after they are released. Firmware " +
+        selectedUnavailableFirmware +
+        " becomes available in " +
+        availableInDays +
+        " day(s).",
+      buttonText: "I understand",
+    });
+  }
+
   async function startFirmwareUpgrade() {
     disableFirmwareSelect = true;
     disableStartUpgrade = true;
-    startUpgradeButtonText = "Starting all device upgrades";
-    startUpgradeButtonTextShort = "Starting all upgrades";
+    startingAllUpgrades = true; // Show spinner
+    startUpgradeButtonText = "Starting all upgrades";
+    startUpgradeButtonTextShort = "Starting upgrades";
+    startUpgradeButtonStyle = "startUpgradeButtonStyleStarting";
     console.log(selectedFirmware);
     console.log(eligibleAgents);
-    const response = await client.call("functions.startFirmwareUpgrade", {
-      firmware: selectedFirmware,
-      agents: eligibleAgents,
-    });
+    informKeepPageOpen();
+    for (let i = 0; i < eligibleAgents.length; i += upgradeBatchSize) {
+      eligibleAgentsBatch = eligibleAgents.slice(i, i + upgradeBatchSize);
+      const response = await client.call("functions.startFirmwareUpgrade", {
+        firmware: selectedFirmware,
+        agents: eligibleAgentsBatch,
+      });
+    }
     console.log(response);
     upgradesAllStarted = response.data;
     if (upgradesAllStarted) {
       disableFirmwareSelect = false;
       disableStartUpgrade = true;
+      startingAllUpgrades = false; // Hide spinner
       startUpgradeButtonText = "All device upgrades started";
       startUpgradeButtonTextShort = "All upgrades started";
+      startUpgradeButtonStyle = "startUpgradeButtonStyleCompleted";
     }
+  }
+
+  async function informKeepPageOpen(): Promise<void> {
+    const result = await context.openAlertDialog({
+      title: "Starting upgrades",
+      message:
+        "Please remain on this page until all device upgrades have started.",
+      buttonText: "I understand",
+    });
   }
 </script>
 
-<main class="component" bind:this={rootEl}>
-  <div class="componentHeader">
-    <h3 class="componentTitle">Bulk Firmware Upgrade</h3>
-  </div>
-  <div class="componentLine">
-    <div class="select" class:is-narrow={isNarrow}>
-      <select disabled={disableFirmwareSelect} bind:value={selectedFirmware}>
-        <option value="" hidden>
-          {#if !isNarrow}
-            {selectFirmwareButtonText}
-          {:else}
-            {selectFirmwareButtonTextShort}
-          {/if}</option
-        >
-        <optgroup label="IXrouter3">
-          {#each firmwareList as firmware}
-            {#if firmware.version[0] == 3}
-              <option on:click={selectVersionAndGetRouters} value={firmware}
-                >{firmware.version}</option
-              >
-            {/if}
-          {/each}
-        </optgroup><optgroup label="IXrouter2">
-          {#each firmwareList as firmware}
-            {#if firmware.version[0] == 2}
-              <option on:click={selectVersionAndGetRouters} value={firmware}
-                >{firmware.version}</option
-              >
-            {/if}
-          {/each}
-        </optgroup></select
-      >
+<main bind:this={rootEl}>
+  <div class="componentPadding">
+    <div class="componentHeader">
+      <h3 class="componentTitle">Bulk Firmware Upgrade</h3>
     </div>
-    <button
-      disabled={disableStartUpgrade}
-      class="startUpgradeButton"
-      class:narrowWidth={isNarrow}
-      on:click={startFirmwareUpgrade}
-      type="button"
-    >
-      {#if !isNarrow}
-        {startUpgradeButtonText}
-      {:else}
-        {startUpgradeButtonTextShort}
-      {/if}
-    </button>
+    <div class="componentLine">
+      <div class="select" class:is-narrow={isNarrow}>
+        <select
+          disabled={disableFirmwareSelect}
+          id="my_select"
+          bind:value={selectedFirmware}
+        >
+          <option value="" hidden>
+            {#if !isNarrow}
+              {selectFirmwareButtonText}
+            {:else}
+              {selectFirmwareButtonTextShort}
+            {/if}</option
+          >
+          <optgroup label="IXrouter3">
+            {#each firmwareList as firmware}
+              {#if firmware.version[0] == 3}
+                <option value={firmware}>{firmware.version}</option>
+              {/if}
+            {/each}
+          </optgroup><optgroup label="IXrouter2">
+            {#each firmwareList as firmware}
+              {#if firmware.version[0] == 2}
+                <option value={firmware}>{firmware.version}</option>
+              {/if}
+            {/each}
+          </optgroup></select
+        >
+      </div>
+      <button
+        disabled={disableStartUpgrade}
+        class={startUpgradeButtonStyle}
+        class:narrowWidth={isNarrow}
+        on:click={startFirmwareUpgrade}
+        type="button"
+      >
+        {#if startingAllUpgrades}
+          <div class="spinnerRow">
+            <div class="spinnerSpacing">
+              <div class="spinner">
+                <svg
+                  preserveAspectRatio="xMidYMid meet"
+                  focusable="false"
+                  viewBox="0 0 100 100"
+                >
+                  <circle cx="50%" cy="50%" r="45" />
+                </svg>
+              </div>
+            </div>
+            {#if !isNarrow}
+              {startUpgradeButtonText}
+            {:else}
+              {startUpgradeButtonTextShort}
+            {/if}
+          </div>
+        {:else if !isNarrow}
+          {startUpgradeButtonText}
+        {:else}
+          {startUpgradeButtonTextShort}
+        {/if}
+      </button>
+    </div>
   </div>
 </main>
 
-<style>
-  main {
-    padding: 8px;
-  }
-
-  .componentHeader {
-    display: flex;
-    flex-direction: row;
-
-    font-family: var(--font-family);
-    height: 40px;
-    box-sizing: border-box;
-    white-space: nowrap;
-    z-index: 1;
-  }
-
-  .componentTitle {
-    flex: 1 0 auto;
-    margin: 0;
-    font-size: 14px;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .componentLine {
-    display: flex;
-    justify-content: space-between;
-  }
+<style lang="scss" scoped>
+  @import "./styles/component.scss";
+  @import "./styles/startfirmware.scss";
+  @import "./styles/spinner.scss";
 
   select {
     appearance: none; /* Removes the default dropdown arrow */
@@ -177,6 +239,14 @@
     font-size: 14px;
     font-family: var(--font-family);
     font-weight: 500;
+  }
+
+  select:disabled {
+    cursor: auto;
+    border-color: transparent;
+    background-color: rgba(0, 0, 0, 0.12);
+    color: var(--body-color);
+    font-weight: normal;
   }
 
   .select {
@@ -211,29 +281,5 @@
     color: var(--body-color);
     text-align: left;
     text-align-last: center;
-  }
-
-  .startUpgradeButton {
-    cursor: pointer;
-    float: right;
-    width: 230px;
-    height: 37px;
-    background-color: var(--accent);
-    color: var(--accent-color);
-    font-size: 14px;
-    text-align: center;
-    border: none;
-    border-radius: 4px;
-    font-family: var(--font-family);
-  }
-
-  .startUpgradeButton:disabled {
-    cursor: auto;
-    background-color: rgba(0, 0, 0, 0.12);
-    color: var(--body-color);
-  }
-
-  .narrowWidth {
-    width: 200px;
   }
 </style>

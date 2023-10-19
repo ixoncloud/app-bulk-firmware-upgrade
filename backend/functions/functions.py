@@ -1,5 +1,8 @@
 from ixoncdkingress.cbc.context import CbcContext
 from packaging.version import parse as parseVersion
+from dateparser.search import search_dates
+from datetime import date
+import datetime
 
 
 @CbcContext.expose
@@ -8,10 +11,13 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
     firmware_list = []
     firmware_list_sorted = []
     firmware_version_list_sorted = []
+    firmware_release_dates_checked_per_agent_type = []
     response = context.api_client.get('AgentTypeList', query={'fields': 'publicId,name'})
     agent_types = response['data']
-    agents = ['IXrouter2', 'IXrouter3']
-    for agent in agents:  # Get all firmware versions for agents
+    agent_type_names = ['IXrouter2', 'IXrouter3']
+    latest_firmware_found_per_agent_type = []
+    today = date.today()
+    for agent in agent_type_names:  # Get all firmware versions for agents
         # Find publicId for specific agent type name
         ixrouter = next(
             (item for item in agent_types if item['name'] == agent), None)
@@ -19,7 +25,7 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
         response = context.api_client.get('AgentTypeFileList', url_args={'publicId': ixrouter_pubid}, query={'fields': 'publicId,name,code,latest,notes'})  # Get all firmware versions for this agent
         ixrouter_firmware_versions = response['data']
         for ixrouter_firmware_version in ixrouter_firmware_versions:
-            firmware_list.append({'agent_type_name': agent, 'agent_type_publicId': ixrouter_pubid,'publicId': ixrouter_firmware_version['publicId'], 'version': ixrouter_firmware_version['code'], 'note': ixrouter_firmware_version['notes']})
+            firmware_list.append({'agent_type_name': agent, 'agent_type_publicId': ixrouter_pubid,'publicId': ixrouter_firmware_version['publicId'],'version': ixrouter_firmware_version['code'],'latest':ixrouter_firmware_version['latest'],'note': ixrouter_firmware_version['notes']})
     for firmware in firmware_list:  # Make a list of version numbers only to enable natural sorting
         firmware_version_list_sorted.append(firmware['version'])
     # Sort version numbers naturally
@@ -29,7 +35,29 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
         # Find this firmware version's publicId and agent type publicId
         for firmware in firmware_list:
             if firmware['version'] == firmware_version:
-                firmware_list_sorted.append({'version': firmware['version'],'publicId':firmware['publicId'],'agent_type_publicId':firmware['agent_type_publicId']})
+                # Skip version if it isn't latest of this agent type
+                if firmware['latest'] == False and not firmware['agent_type_publicId'] in latest_firmware_found_per_agent_type:
+                    continue
+                elif firmware['latest'] == True:
+                    latest_firmware_found_per_agent_type.append(firmware['agent_type_publicId'])
+
+                if firmware['agent_type_publicId'] in firmware_release_dates_checked_per_agent_type:
+                    firmware_allowed = True
+                    days_remaining = ''
+                else:
+                    firmware_release_date_text = search_dates(firmware['note'],languages=['en'])
+                    firmware_release_date_string = str(firmware_release_date_text[0][1])
+                    firmware_release_date = datetime.datetime.strptime(firmware_release_date_string, '%Y-%m-%d %H:%M:%S').date()
+                    date_delta = today - firmware_release_date
+                    days = int(date_delta.days)
+                    if days < 14:
+                        firmware_allowed = False
+                        days_remaining = 14 - days
+                    else:
+                        firmware_allowed = True
+                        days_remaining = ''
+                        firmware_release_dates_checked_per_agent_type.append(firmware['agent_type_publicId'])
+                firmware_list_sorted.append({'version': firmware['version'],'publicId':firmware['publicId'],'agent_type_publicId':firmware['agent_type_publicId'],'allowed':firmware_allowed,'days_remaining':days_remaining})
     return (firmware_list_sorted)
 
 
@@ -68,13 +96,5 @@ def startFirmwareUpgrade(context: CbcContext, firmware, agents, **kwargs: dict[s
     del kwargs # Removes non-defined key word arguments
     # Upgrade all to latest version
     for agent in agents:
-        print('{} {} ({})'.format('Upgrading',
-              agent['name'], agent['publicId']))
         response = context.api_client.post('AgentFirmwareUpgrade', url_args={'agentId': agent['publicId']}, data={'file': {'publicId': firmware['publicId']}})
-        # if response['status'] == 'error':
-        #     response_message = ''.join(response['data'][0]['message'])
-        #     print('{} {}'.format('Failed to start upgrade:', response_message))
-        # else:
-        #     print('{} {} {} {}'.format('Successfully started upgrade from',agent['firmware'], 'to', firmware['version']))
-    print('Upgrades ALL started')
     return True

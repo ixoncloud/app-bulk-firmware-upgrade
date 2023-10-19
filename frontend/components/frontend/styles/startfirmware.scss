@@ -1,0 +1,37 @@
+.startUpgradeButtonStyleEnabled,
+.startUpgradeButtonStyleDisabled,
+.startUpgradeButtonStyleStarting,
+.startUpgradeButtonStyleCompleted {
+  float: right;
+  width: 230px;
+  height: 37px;
+  font-size: 14px;
+  text-align: center;
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-family);
+}
+
+.startUpgradeButtonStyleEnabled {
+  cursor: pointer;
+  background-color: var(--blue); // var(--accent); // --accent --primary
+  color: white; // var(--accent-color);
+}
+
+.startUpgradeButtonStyleDisabled {
+  cursor: auto;
+  background-color: rgba(0, 0, 0, 0.12);
+  color: var(--body-color);
+}
+
+.startUpgradeButtonStyleStarting {
+  cursor: auto;
+  background-color: var(--blue); // var(--accent);
+  color: white; // var(--accent-color);
+}
+
+.startUpgradeButtonStyleCompleted {
+  cursor: auto;
+  background-color: var(--success);
+  color: white; // var(--accent-color);
+}

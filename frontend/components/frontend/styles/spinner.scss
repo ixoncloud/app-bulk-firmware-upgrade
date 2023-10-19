@@ -1,0 +1,132 @@
+$spinner-size: 19px;
+
+.spinner {
+  height: $spinner-size;
+  width: $spinner-size;
+  position: relative;
+  animation: spinner-rotate 2000ms linear infinite;
+
+  svg {
+    position: absolute;
+    transform: rotate(-90deg);
+    top: 0;
+    left: 0;
+    transform-origin: center;
+    overflow: visible;
+    height: $spinner-size;
+    width: $spinner-size;
+
+    circle {
+      fill: transparent;
+      transform-origin: center;
+      transition: stroke-dashoffset 225ms linear;
+      transition-property: stroke;
+      animation-duration: 4000ms;
+      animation-timing-function: cubic-bezier(0.35, 0, 0.25, 1);
+      animation-iteration-count: infinite;
+      animation-name: spinner-rotate-elastic;
+      stroke-dasharray: 282.743px;
+      stroke-width: 10%;
+      stroke: white; // var(--accent-color); //var(--primary);
+    }
+  }
+}
+
+.spinnerRow {
+  display: flex;
+  height: 100%;
+  flex-direction: row;
+  place-content: center;
+  align-items: center;
+}
+
+.spinnerSpacing {
+  padding: 0 0.5em 0 0;
+}
+
+.icon-button .spinner {
+  height: 20px;
+  width: 20px;
+  margin: 10px;
+
+  svg {
+    height: 20px;
+    width: 20px;
+  }
+}
+
+@keyframes spinner-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinner-rotate-elastic {
+  0% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotate(0);
+  }
+  12.5% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotate(0);
+  }
+  12.5001% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotateX(180deg) rotate(72.5deg);
+  }
+  25% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotateX(180deg) rotate(72.5deg);
+  }
+  25.0001% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotate(270deg);
+  }
+  37.5% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotate(270deg);
+  }
+  37.5001% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotateX(180deg) rotate(161.5deg);
+  }
+  50% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotateX(180deg) rotate(161.5deg);
+  }
+  50.0001% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotate(180deg);
+  }
+  62.5% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotate(180deg);
+  }
+  62.5001% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotateX(180deg) rotate(251.5deg);
+  }
+  75% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotateX(180deg) rotate(251.5deg);
+  }
+  75.0001% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotate(90deg);
+  }
+  87.5% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotate(90deg);
+  }
+  87.5001% {
+    stroke-dashoffset: 56.5486677px;
+    transform: rotateX(180deg) rotate(341.5deg);
+  }
+  100% {
+    stroke-dashoffset: 268.606171575px;
+    transform: rotateX(180deg) rotate(341.5deg);
+  }
+}

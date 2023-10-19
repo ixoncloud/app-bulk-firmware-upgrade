@@ -1,0 +1,32 @@
+.componentPadding {
+  padding: 8px;
+}
+
+.componentHeader {
+  display: flex;
+  flex-direction: row;
+
+  font-family: var(--font-family);
+  height: 40px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.componentTitle {
+  flex: 1 0 auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.componentLine {
+  display: flex;
+  justify-content: space-between;
+}
+
+.narrowWidth {
+  width: 200px;
+}
