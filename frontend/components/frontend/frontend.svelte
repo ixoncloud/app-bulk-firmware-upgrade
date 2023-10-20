@@ -17,7 +17,8 @@
   const upgradeBatchSize = 50;
   let eligibleAgentsBatch;
   let disableStartUpgrade = true;
-  let startingAllUpgrades = false;
+  let loading = false;
+  let spinnerColor = "spinnerLight";
   let startUpgradeButtonText = "No eligible devices found";
   let startUpgradeButtonTextShort = "No devices found";
   let startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
@@ -66,6 +67,8 @@
 
   async function selectVersionAndGetRouters() {
     disableStartUpgrade = true;
+    loading = true; // Show spinner
+    spinnerColor = "spinnerDark";
     startUpgradeButtonText = "Searching for eligible devices";
     startUpgradeButtonTextShort = "Searching devices";
     startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
@@ -75,6 +78,7 @@
     eligibleAgents = response.data;
     console.log(eligibleAgents);
     upgradesAllStarted = false; // Reset value
+    loading = false; // Hide spinner
     if (eligibleAgents.length === 0) {
       disableStartUpgrade = true;
       startUpgradeButtonText = "No eligible devices found";
@@ -114,7 +118,8 @@
   async function startFirmwareUpgrade() {
     disableFirmwareSelect = true;
     disableStartUpgrade = true;
-    startingAllUpgrades = true; // Show spinner
+    loading = true; // Show spinner
+    spinnerColor = "spinnerLight";
     startUpgradeButtonText = "Starting all upgrades";
     startUpgradeButtonTextShort = "Starting upgrades";
     startUpgradeButtonStyle = "startUpgradeButtonStyleStarting";
@@ -133,7 +138,7 @@
     if (upgradesAllStarted) {
       disableFirmwareSelect = false;
       disableStartUpgrade = true;
-      startingAllUpgrades = false; // Hide spinner
+      loading = false; // Hide spinner
       startUpgradeButtonText = "All device upgrades started";
       startUpgradeButtonTextShort = "All upgrades started";
       startUpgradeButtonStyle = "startUpgradeButtonStyleCompleted";
@@ -191,17 +196,19 @@
         on:click={startFirmwareUpgrade}
         type="button"
       >
-        {#if startingAllUpgrades}
+        {#if loading}
           <div class="spinnerRow">
             <div class="spinnerSpacing">
               <div class="spinner">
-                <svg
-                  preserveAspectRatio="xMidYMid meet"
-                  focusable="false"
-                  viewBox="0 0 100 100"
-                >
-                  <circle cx="50%" cy="50%" r="45" />
-                </svg>
+                <div class={spinnerColor}>
+                  <svg
+                    preserveAspectRatio="xMidYMid meet"
+                    focusable="false"
+                    viewBox="0 0 100 100"
+                  >
+                    <circle cx="50%" cy="50%" r="45" />
+                  </svg>
+                </div>
               </div>
             </div>
             {#if !isNarrow}

@@ -27,8 +27,13 @@ $spinner-size: 19px;
       animation-name: spinner-rotate-elastic;
       stroke-dasharray: 282.743px;
       stroke-width: 10%;
-      stroke: white; // var(--accent-color); //var(--primary);
     }
+  }
+  .spinnerLight {
+    stroke: white;
+  }
+  .spinnerDark {
+    stroke: var(--body-color);
   }
 }
 
