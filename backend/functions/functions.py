@@ -12,20 +12,16 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
     firmware_list_sorted = []
     firmware_version_list_sorted = []
     firmware_release_dates_checked_per_agent_type = []
-    response = context.api_client.get('AgentTypeList', query={'fields': 'publicId,name'})
+    agent_type_names = '"IXrouter2","IXrouter3"'
+    response = context.api_client.get('AgentTypeList', query={'fields': 'publicId,name', 'filters': 'in(name,' + agent_type_names + ')'})
     agent_types = response['data']
-    agent_type_names = ['IXrouter2', 'IXrouter3']
     latest_firmware_found_per_agent_type = []
     today = date.today()
-    for agent in agent_type_names:  # Get all firmware versions for agents
-        # Find publicId for specific agent type name
-        ixrouter = next(
-            (item for item in agent_types if item['name'] == agent), None)
-        ixrouter_pubid = ixrouter['publicId']
-        response = context.api_client.get('AgentTypeFileList', url_args={'publicId': ixrouter_pubid}, query={'fields': 'publicId,name,code,latest,notes'})  # Get all firmware versions for this agent
+    for agent_type in agent_types:  # Get all firmware versions for agents
+        response = context.api_client.get('AgentTypeFileList', url_args={'publicId': agent_type['publicId']}, query={'fields': 'publicId,name,code,latest,notes'})  # Get all firmware versions for this agent
         ixrouter_firmware_versions = response['data']
         for ixrouter_firmware_version in ixrouter_firmware_versions:
-            firmware_list.append({'agent_type_name': agent, 'agent_type_publicId': ixrouter_pubid,'publicId': ixrouter_firmware_version['publicId'],'version': ixrouter_firmware_version['code'],'latest':ixrouter_firmware_version['latest'],'note': ixrouter_firmware_version['notes']})
+            firmware_list.append({'agent_type_name': agent_type['name'], 'agent_type_publicId': agent_type['publicId'],'publicId': ixrouter_firmware_version['publicId'],'version': ixrouter_firmware_version['code'],'latest':ixrouter_firmware_version['latest'],'note': ixrouter_firmware_version['notes']})
     for firmware in firmware_list:  # Make a list of version numbers only to enable natural sorting
         firmware_version_list_sorted.append(firmware['version'])
     # Sort version numbers naturally
@@ -68,16 +64,15 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
     more_after = None
     all_agents_checked = False
     while all_agents_checked == False:
-        response = context.api_client.get('AgentList', query={'page-size': '1000', 'page-after': more_after, 'fields': 'publicId,name,deviceId,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer'})
+        response = context.api_client.get('AgentList', query={
+            'page-size': '1000',
+            'page-after': more_after,
+            'fields': 'publicId,name,deviceId,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer',
+            'filters': ['eq(type.publicId,"' + firmware['agent_type_publicId'] + '")', 'ne(lastSeenAgentUserAgent.firmwareVersion,"' + firmware['version'] + '")', 'isnotnull(mdrServer)']
+        })
         agents_list = response['data']
         for agent in agents_list:
-            # Check if agent is correct agent type (e.g. IXrouter3), based on selected firmware version
-            if agent['type']['publicId'] == firmware['agent_type_publicId']:
-                # Check if agent is not already running selected firmware version
-                if agent['lastSeenAgentUserAgent']['firmwareVersion'] != firmware['version']:
-                    # Check if IXrouter has an active MQTT connection
-                    if agent['mdrServer'] is not None:
-                        agent_list.append({'name': agent['name'], 'publicId': agent['publicId'], 'firmware': agent['lastSeenAgentUserAgent']['firmwareVersion']})
+            agent_list.append({'name': agent['name'], 'publicId': agent['publicId'], 'firmware': agent['lastSeenAgentUserAgent']['firmwareVersion']})
         more_after = response['moreAfter']
         if more_after is None:  # All agents checked
             all_agents_checked = True

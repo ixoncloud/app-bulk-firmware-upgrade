@@ -13,14 +13,15 @@
   let selectFirmwareButtonText = "Select target firmware";
   let selectFirmwareButtonTextShort = "Select firmware";
   let disableFirmwareSelect = false;
+  let loadingFirmware = true;
 
   const upgradeBatchSize = 50;
   let eligibleAgentsBatch;
   let disableStartUpgrade = true;
   let loading = false;
   let spinnerColor = "spinnerLight";
-  let startUpgradeButtonText = "No eligible devices found";
-  let startUpgradeButtonTextShort = "No devices found";
+  let startUpgradeButtonText = "No firmware selected";
+  let startUpgradeButtonTextShort = "No firmware selected";
   let startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
   let upgradesAllStarted;
 
@@ -42,8 +43,9 @@
 
   onMount(async () => {
     disableFirmwareSelect = true;
-    selectFirmwareButtonText = "Searching firmware...";
-    selectFirmwareButtonTextShort = "Searching firmware...";
+    loadingFirmware = true; // Show spinner
+    selectFirmwareButtonText = "Searching firmware";
+    selectFirmwareButtonTextShort = "Searching firmware";
     width = rootEl.getBoundingClientRect().width;
     const resizeObserver = new ResizeObserver((entries) => {
       entries.forEach((entry) => {
@@ -57,6 +59,7 @@
     firmwareList = response.data;
     console.log(firmwareList);
     disableFirmwareSelect = false;
+    loadingFirmware = false; // Hide spinner
     selectFirmwareButtonText = "Select target firmware";
     selectFirmwareButtonTextShort = "Select firmware";
 
@@ -99,8 +102,8 @@
     availableInDays
   ): Promise<void> {
     disableStartUpgrade = true;
-    startUpgradeButtonText = "No eligible devices found";
-    startUpgradeButtonTextShort = "No devices found";
+    startUpgradeButtonText = "No firmware selected";
+    startUpgradeButtonTextShort = "No firmware selected";
     startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
     selectedFirmware = "";
     const result = await context.openAlertDialog({
@@ -161,34 +164,64 @@
       <h3 class="componentTitle">Bulk Firmware Upgrade</h3>
     </div>
     <div class="componentLine">
-      <div class="select" class:is-narrow={isNarrow}>
-        <select
-          disabled={disableFirmwareSelect}
-          id="my_select"
-          bind:value={selectedFirmware}
+      {#if loadingFirmware}
+        <button
+          disabled
+          class={startUpgradeButtonStyle}
+          class:narrowWidth={isNarrow}
+          type="button"
         >
-          <option value="" hidden>
+          <div class="spinnerRow">
+            <div class="spinnerSpacing">
+              <div class="spinner">
+                <div class="spinnerDark">
+                  <svg
+                    preserveAspectRatio="xMidYMid meet"
+                    focusable="false"
+                    viewBox="0 0 100 100"
+                  >
+                    <circle cx="50%" cy="50%" r="45" />
+                  </svg>
+                </div>
+              </div>
+            </div>
             {#if !isNarrow}
               {selectFirmwareButtonText}
             {:else}
               {selectFirmwareButtonTextShort}
-            {/if}</option
+            {/if}
+          </div>
+        </button>
+      {:else}
+        <div class="select" class:is-narrow={isNarrow}>
+          <select
+            disabled={disableFirmwareSelect}
+            bind:value={selectedFirmware}
           >
-          <optgroup label="IXrouter3">
-            {#each firmwareList as firmware}
-              {#if firmware.version[0] == 3}
-                <option value={firmware}>{firmware.version}</option>
-              {/if}
-            {/each}
-          </optgroup><optgroup label="IXrouter2">
-            {#each firmwareList as firmware}
-              {#if firmware.version[0] == 2}
-                <option value={firmware}>{firmware.version}</option>
-              {/if}
-            {/each}
-          </optgroup></select
-        >
-      </div>
+            <option value="" hidden>
+              {#if !isNarrow}
+                {selectFirmwareButtonText}
+              {:else}
+                {selectFirmwareButtonTextShort}
+              {/if}</option
+            >
+            <optgroup label="IXrouter3">
+              {#each firmwareList as firmware}
+                {#if firmware.version[0] == 3}
+                  <option value={firmware}>{firmware.version}</option>
+                {/if}
+              {/each}
+            </optgroup><optgroup label="IXrouter2">
+              {#each firmwareList as firmware}
+                {#if firmware.version[0] == 2}
+                  <option value={firmware}>{firmware.version}</option>
+                {/if}
+              {/each}
+            </optgroup></select
+          >
+        </div>
+      {/if}
+      <div class="buttonPadding" />
       <button
         disabled={disableStartUpgrade}
         class={startUpgradeButtonStyle}
@@ -234,7 +267,6 @@
 
   select {
     appearance: none; /* Removes the default dropdown arrow */
-    padding: 0 1em 0 0;
     cursor: pointer;
     height: 37px;
     text-align: center;
@@ -257,7 +289,6 @@
   }
 
   .select {
-    padding-right: 8px;
     width: 230px;
     display: grid;
     grid-template-areas: "select";
