@@ -27,7 +27,7 @@
 
   let rootEl: HTMLElement;
   let width: number | null = null;
-  $: isNarrow = width !== null ? width <= 460 : false;
+  $: isNarrow = width !== null ? width <= 500 : false;
 
   $: if (selectedFirmware) {
     console.log(selectedFirmware);
@@ -135,6 +135,8 @@
         firmware: selectedFirmware,
         agents: eligibleAgentsBatch,
       });
+      // startUpgradeButtonText = "(" + i + "/" + eligibleAgents.length + ")";
+      // startUpgradeButtonTextShort = "(" + i + "/" + eligibleAgents.length + ")";
     }
     console.log(response);
     upgradesAllStarted = response.data;
@@ -289,7 +291,7 @@
   }
 
   .select {
-    width: 230px;
+    width: 270px;
     display: grid;
     grid-template-areas: "select";
     align-items: center;
