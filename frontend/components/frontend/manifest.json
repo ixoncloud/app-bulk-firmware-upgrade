@@ -1,6 +1,6 @@
 {
   "main": "pct-frontend.min.js",
-  "version": "18",
+  "version": "19",
   "sheetSettings": {
     "defaultCols": 7,
     "defaultRows": 2,
