@@ -6,6 +6,19 @@ import datetime
 
 
 @CbcContext.expose
+def checkUserPermissions(context: CbcContext, **kwargs: dict[str, str]):
+    del kwargs # Removes non-defined key word arguments
+    response = context.api_client.get('RoleList', query={'fields': 'name,publicId,permissions'})
+    roles = response['data']
+    for role in roles:
+        if role['permissions'] is not None:
+            for permission in role['permissions']:
+                if permission['publicId'] in ('COMPANY_ADMIN', 'MANAGE_AGENT'):
+                    return (True)
+    return (False)
+
+
+@CbcContext.expose
 def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
     del kwargs # Removes non-defined key word arguments
     firmware_list = []

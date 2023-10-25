@@ -10,6 +10,8 @@
   let selectedFirmware;
   let eligibleAgents = [];
 
+  let passedPermissionsCheck = false;
+
   let selectFirmwareButtonText = "Select target firmware";
   let selectFirmwareButtonTextShort = "Select firmware";
   let disableFirmwareSelect = false;
@@ -55,13 +57,24 @@
     resizeObserver.observe(rootEl);
 
     client = context.createBackendComponentClient();
-    response = await client.call("functions.getFirmwareVersions");
-    firmwareList = response.data;
-    console.log(firmwareList);
-    disableFirmwareSelect = false;
-    loadingFirmware = false; // Hide spinner
-    selectFirmwareButtonText = "Select target firmware";
-    selectFirmwareButtonTextShort = "Select firmware";
+    response = await client.call("functions.checkUserPermissions");
+    passedPermissionsCheck = response.data;
+
+    if (passedPermissionsCheck) {
+      response = await client.call("functions.getFirmwareVersions");
+      firmwareList = response.data;
+      console.log(firmwareList);
+      disableFirmwareSelect = false;
+      loadingFirmware = false; // Hide spinner
+      selectFirmwareButtonText = "Select target firmware";
+      selectFirmwareButtonTextShort = "Select firmware";
+    } else {
+      selectFirmwareButtonText = "- Not allowed -";
+      selectFirmwareButtonTextShort = "Not allowed";
+      loadingFirmware = false; // Hide spinner
+      startUpgradeButtonText = "- Insufficient permissions -";
+      startUpgradeButtonTextShort = "Insufficient permissions";
+    }
 
     return () => {
       resizeObserver.unobserve(rootEl);
@@ -135,8 +148,6 @@
         firmware: selectedFirmware,
         agents: eligibleAgentsBatch,
       });
-      // startUpgradeButtonText = "(" + i + "/" + eligibleAgents.length + ")";
-      // startUpgradeButtonTextShort = "(" + i + "/" + eligibleAgents.length + ")";
     }
     console.log(response);
     upgradesAllStarted = response.data;
@@ -166,33 +177,39 @@
       <h3 class="componentTitle">Bulk Firmware Upgrade</h3>
     </div>
     <div class="componentLine">
-      {#if loadingFirmware}
+      {#if loadingFirmware || !passedPermissionsCheck}
         <button
           disabled
           class={startUpgradeButtonStyle}
           class:narrowWidth={isNarrow}
           type="button"
         >
-          <div class="spinnerRow">
-            <div class="spinnerSpacing">
-              <div class="spinner">
-                <div class="spinnerDark">
-                  <svg
-                    preserveAspectRatio="xMidYMid meet"
-                    focusable="false"
-                    viewBox="0 0 100 100"
-                  >
-                    <circle cx="50%" cy="50%" r="45" />
-                  </svg>
+          {#if loadingFirmware}
+            <div class="spinnerRow">
+              <div class="spinnerSpacing">
+                <div class="spinner">
+                  <div class="spinnerDark">
+                    <svg
+                      preserveAspectRatio="xMidYMid meet"
+                      focusable="false"
+                      viewBox="0 0 100 100"
+                    >
+                      <circle cx="50%" cy="50%" r="45" />
+                    </svg>
+                  </div>
                 </div>
               </div>
+              {#if !isNarrow}
+                {selectFirmwareButtonText}
+              {:else}
+                {selectFirmwareButtonTextShort}
+              {/if}
             </div>
-            {#if !isNarrow}
-              {selectFirmwareButtonText}
-            {:else}
-              {selectFirmwareButtonTextShort}
-            {/if}
-          </div>
+          {:else if !isNarrow}
+            {selectFirmwareButtonText}
+          {:else}
+            {selectFirmwareButtonTextShort}
+          {/if}
         </button>
       {:else}
         <div class="select" class:is-narrow={isNarrow}>
