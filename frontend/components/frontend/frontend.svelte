@@ -29,7 +29,7 @@
 
   let rootEl: HTMLElement;
   let width: number | null = null;
-  $: isNarrow = width !== null ? width <= 500 : false;
+  $: isNarrow = width !== null ? width <= 580 : false;
 
   $: if (selectedFirmware) {
     console.log(selectedFirmware);
@@ -308,7 +308,7 @@
   }
 
   .select {
-    width: 270px;
+    width: 280px;
     display: grid;
     grid-template-areas: "select";
     align-items: center;
