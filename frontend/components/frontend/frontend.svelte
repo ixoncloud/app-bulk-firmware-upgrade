@@ -70,10 +70,10 @@
       selectFirmwareButtonTextShort = "Select firmware";
     } else {
       selectFirmwareButtonText = "- Not allowed -";
-      selectFirmwareButtonTextShort = "Not allowed";
+      selectFirmwareButtonTextShort = "- Not allowed -";
       loadingFirmware = false; // Hide spinner
       startUpgradeButtonText = "- Insufficient permissions -";
-      startUpgradeButtonTextShort = "Insufficient permissions";
+      startUpgradeButtonTextShort = "- Insufficient permissions -";
     }
 
     return () => {
