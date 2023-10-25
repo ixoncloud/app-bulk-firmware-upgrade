@@ -1,10 +1,10 @@
 {
   "main": "pct-frontend.min.js",
-  "version": "17",
+  "version": "18",
   "sheetSettings": {
-    "defaultCols": 6,
+    "defaultCols": 7,
     "defaultRows": 2,
-    "minCols": 6,
+    "minCols": 7,
     "minRows": 2
   },
   "inputs": []
