@@ -34,3 +34,44 @@
 .narrowWidth {
   width: 200px;
 }
+
+.hrTop {
+  width: calc(100% + 24px);
+  display: block;
+  height: 0px;
+  border: 0 none;
+  border-top: 1px solid var(--card-border-color);
+  position: absolute;
+  top: 95px;
+}
+
+.hrBottom {
+  width: calc(100% + 24px);
+  display: block;
+  height: 0px;
+  border: 0 none;
+  border-top: 1px solid var(--card-border-color);
+  position: absolute;
+  bottom: 43px; //38px;
+}
+
+.hrBottomIsNarrow {
+  width: calc(100% + 24px);
+  display: block;
+  height: 0px;
+  border: 0 none;
+  border-top: 1px solid var(--card-border-color);
+  position: absolute;
+  bottom: 55px;
+}
+
+.hrRight {
+  height: 25px;
+  display: block;
+  border-right: 1px solid var(--card-border-color);
+}
+
+.hrRightIsNarrow {
+  display: block;
+  border-right: 1px solid var(--card-border-color);
+}

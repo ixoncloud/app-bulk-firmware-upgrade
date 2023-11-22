@@ -45,8 +45,21 @@ $spinner-size: 19px;
   align-items: center;
 }
 
-.spinnerSpacing {
+.nonSpinnerRow {
+  display: flex;
+  height: 100%;
+  flex-direction: row;
+  place-content: center;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.spinnerSpacingRight {
   padding: 0 0.5em 0 0;
+}
+
+.spinnerSpacingLeftBottom {
+  padding: 0 0 0.3em 0.5em;
 }
 
 .icon-button .spinner {

@@ -80,12 +80,12 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
         response = context.api_client.get('AgentList', query={
             'page-size': '1000',
             'page-after': more_after,
-            'fields': 'publicId,name,deviceId,serialNumber,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer',
+            'fields': 'publicId,name,serialNumber,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer',
             # 'filters': ['eq(type.publicId,"' + firmware['agent_type_publicId'] + '")', 'ne(lastSeenAgentUserAgent.firmwareVersion,"' + firmware['version'] + '")', 'isnotnull(mdrServer)']
         })
         agents_list = response['data']
         for agent in agents_list:
-            agent_list.append({'name': agent['name'], 'publicId': agent['publicId'], 'serialNumber': agent['serialNumber'],'firmware': agent['lastSeenAgentUserAgent']['firmwareVersion']})
+            agent_list.append({'name': agent['name'], 'publicId': agent['publicId'], 'serialNumber': agent['serialNumber'], 'firmware': agent['lastSeenAgentUserAgent']['firmwareVersion']})
         more_after = response['moreAfter']
         if more_after is None:  # All agents checked
             all_agents_checked = True

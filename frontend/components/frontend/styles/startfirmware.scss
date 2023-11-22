@@ -5,16 +5,16 @@
   float: right;
   width: 280px;
   height: 37px;
-  font-size: 14px;
   text-align: center;
   border: none;
   border-radius: 4px;
-  font-family: var(--font-family);
+  font-size: 14px;
+  font-family: Roboto, Helvetica Neue, sans-serif;
 }
 
 .startUpgradeButtonStyleEnabled {
   cursor: pointer;
-  background-color: var(--blue); // var(--accent); // --accent --primary
+  background-color: #1059d2; // var(--accent); // --accent --primary
   color: white; // var(--accent-color);
 }
 
@@ -22,16 +22,4 @@
   cursor: auto;
   background-color: rgba(0, 0, 0, 0.12);
   color: var(--body-color);
-}
-
-.startUpgradeButtonStyleStarting {
-  cursor: auto;
-  background-color: var(--blue); // var(--accent);
-  color: white; // var(--accent-color);
-}
-
-.startUpgradeButtonStyleCompleted {
-  cursor: auto;
-  background-color: var(--success);
-  color: white; // var(--accent-color);
 }

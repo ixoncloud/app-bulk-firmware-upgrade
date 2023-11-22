@@ -1,0 +1,87 @@
+.tableWrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 96px; //100px;
+  bottom: 43px; //48px; //45px;
+  padding: 0 8px;
+  overflow: auto;
+  overflow-anchor: none;
+}
+
+.tableWrapperIsNarrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100px;
+  bottom: 60px;
+  padding: 0 8px;
+  overflow: auto;
+  overflow-anchor: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table thead th {
+  position: sticky;
+  white-space: nowrap;
+  background: var(--basic);
+  top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 7em;
+  z-index: 10;
+  text-align: left;
+  padding: 12px 0 6px 0; //0 6px 12px 0;
+}
+
+table thead tr {
+  font-weight: 600;
+}
+
+table tbody {
+  overflow-y: auto; // Trigger vertical scroll
+  overflow-x: hidden; // Hide the horizontal scroll
+}
+
+table thead tr,
+table tbody tr {
+  height: 28px !important;
+  font-size: 14px;
+  font-family: Roboto, Helvetica Neue, sans-serif;
+
+  .col:last-child {
+    padding-right: 0;
+  }
+}
+
+table tbody tr:hover {
+  background-color: #f7f7f7;
+}
+
+table tbody tr .col {
+  padding: 6px 6px 6px 0;
+  line-height: 16px;
+  border-bottom: 1px solid var(--card-border-color);
+  vertical-align: top;
+}
+
+.columnName {
+  width: 84%;
+  text-align: left;
+}
+
+.columnSerialNumber {
+  width: 10%;
+  min-width: 100px;
+  text-align: left;
+}
+
+.columnFirmware {
+  width: 6%;
+  min-width: 60px;
+  text-align: left;
+}
