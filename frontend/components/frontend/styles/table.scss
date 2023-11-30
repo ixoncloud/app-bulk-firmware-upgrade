@@ -2,8 +2,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 96px; //100px;
-  bottom: 43px; //48px; //45px;
+  top: 96px;
+  bottom: 43px;
   padding: 0 8px;
   overflow: auto;
   overflow-anchor: none;
@@ -13,8 +13,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 100px;
-  bottom: 60px;
+  top: 96px;
+  bottom: 55px;
   padding: 0 8px;
   overflow: auto;
   overflow-anchor: none;
@@ -69,8 +69,13 @@ table tbody tr .col {
   vertical-align: top;
 }
 
+.columnCheck {
+  width: 5%;
+  text-align: left;
+}
+
 .columnName {
-  width: 84%;
+  width: 79%;
   text-align: left;
 }
 

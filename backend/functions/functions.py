@@ -7,7 +7,7 @@ import datetime
 
 @CbcContext.expose
 def checkUserPermissions(context: CbcContext, **kwargs: dict[str, str]):
-    del kwargs # Removes non-defined key word arguments
+    del kwargs
     response = context.api_client.get('RoleList', query={'fields': 'name,publicId,permissions'})
     roles = response['data']
     for role in roles:
@@ -20,7 +20,7 @@ def checkUserPermissions(context: CbcContext, **kwargs: dict[str, str]):
 
 @CbcContext.expose
 def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
-    del kwargs # Removes non-defined key word arguments
+    del kwargs
     firmware_list = []
     firmware_list_sorted = []
     firmware_version_list_sorted = []
@@ -30,8 +30,13 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
     agent_types = response['data']
     latest_firmware_found_per_agent_type = []
     today = date.today()
-    for agent_type in agent_types:  # Get all firmware versions for agents
-        response = context.api_client.get('AgentTypeFileList', url_args={'publicId': agent_type['publicId']}, query={'fields': 'publicId,name,code,latest,notes'})  # Get all firmware versions for this agent
+    # Get all firmware versions for agents
+    for agent_type in agent_types:
+        response = context.api_client.get(
+            'AgentTypeFileList',
+            url_args={'publicId': agent_type['publicId']},
+            query={'fields': 'publicId,name,code,latest,notes'}
+        )  # Get all firmware versions for this agent
         ixrouter_firmware_versions = response['data']
         for ixrouter_firmware_version in ixrouter_firmware_versions:
             firmware_list.append({'agent_type_name': agent_type['name'], 'agent_type_publicId': agent_type['publicId'],'publicId': ixrouter_firmware_version['publicId'],'version': ixrouter_firmware_version['code'],'latest':ixrouter_firmware_version['latest'],'note': ixrouter_firmware_version['notes']})
@@ -45,7 +50,7 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
         for firmware in firmware_list:
             if firmware['version'] == firmware_version:
                 # Skip version if it isn't latest of this agent type
-                if firmware['latest'] == False and not firmware['agent_type_publicId'] in latest_firmware_found_per_agent_type:
+                if firmware['latest'] == False and firmware['agent_type_publicId'] not in latest_firmware_found_per_agent_type:
                     continue
                 elif firmware['latest'] == True:
                     latest_firmware_found_per_agent_type.append(firmware['agent_type_publicId'])
@@ -54,7 +59,7 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
                     firmware_allowed = True
                     days_remaining = ''
                 else:
-                    firmware_release_date_text = search_dates(firmware['note'],languages=['en'])
+                    firmware_release_date_text = search_dates(firmware['note'], languages=['en'])
                     firmware_release_date_string = str(firmware_release_date_text[0][1])
                     firmware_release_date = datetime.datetime.strptime(firmware_release_date_string, '%Y-%m-%d %H:%M:%S').date()
                     date_delta = today - firmware_release_date
@@ -72,7 +77,7 @@ def getFirmwareVersions(context: CbcContext, **kwargs: dict[str, str]):
 
 @CbcContext.expose
 def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str, str]):
-    del kwargs # Removes non-defined key word arguments
+    del kwargs
     agent_list = []
     more_after = None
     all_agents_checked = False
@@ -87,10 +92,9 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
         for agent in agents_list:
             agent_list.append({'name': agent['name'], 'publicId': agent['publicId'], 'serialNumber': agent['serialNumber'], 'firmware': agent['lastSeenAgentUserAgent']['firmwareVersion']})
         more_after = response['moreAfter']
-        if more_after is None:  # All agents checked
+        if more_after is None:
             all_agents_checked = True
-            break  # Redundant
-
+            break
     # List all devices
     agent_list.sort(key=lambda i: i['name'])
     if not agent_list:
@@ -101,8 +105,7 @@ def selectVersionAndGetRouters(context: CbcContext, firmware, **kwargs: dict[str
 
 @CbcContext.expose
 def startFirmwareUpgrade(context: CbcContext, firmware, agents, **kwargs: dict[str, str]):
-    del kwargs # Removes non-defined key word arguments
-    # Upgrade all to latest version
+    del kwargs
     for agent in agents:
         response = context.api_client.post('AgentFirmwareUpgrade', url_args={'agentId': agent['publicId']}, data={'file': {'publicId': firmware['publicId']}})
     return True
