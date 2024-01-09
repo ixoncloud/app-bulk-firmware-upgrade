@@ -5,20 +5,26 @@
 
   let client;
   let response;
-
-  let firmwareList = [];
-  let selectedFirmware;
-  let tableAgentsStatus: number;
-  let tableAgents = [];
-  let eligibleAgents = [];
-
-  let passedPermissionsCheck = undefined;
+  let url;
+  let authToken;
+  $: activeWebsocketConn = undefined;
+  let activeWebsocket;
+  let timerWebsocketRenewal;
 
   let state: number;
+  let passedPermissionsCheck = undefined;
   let searchingFirmware = true;
+  let searchingAgents = false;
+  let upgradingAgents = false;
+
   let selectFirmwareButtonText = "";
   let selectFirmwareButtonTextLong = "";
   let selectFirmwareButtonTextShort = "";
+  let selectedFirmware;
+  let firmwareList = [];
+  let eligibleAgents = [];
+  let disableFirmwareSelect = false;
+
   let startUpgradeButtonText = "";
   let startUpgradeButtonTextLong = "";
   let startUpgradeButtonTextShort = "";
@@ -26,35 +32,24 @@
   let upgradeStatusText = "";
   let upgradeStatusTextLong = "";
   let upgradeStatusTextShort = "";
+  const upgradeBatchSize = 5;
+  let eligibleAgentsBatch = [];
+  let disableStartUpgrade = true;
+
+  let tableAgentsStatus: number;
+  let tableAgents = [];
+
+  let showUpgradingAgentsStatus = false;
   let informUpgradeStatusTitleText = "";
   let informUpgradeStatusMessageText = "";
   let upgradeStatusTitleStyling = "";
   let spinnerRowStyling = "";
-
-  let disableFirmwareSelect = false;
-
-  const upgradeBatchSize = 5;
-  let eligibleAgentsBatch = [];
-  let disableStartUpgrade = true;
-  let searchingAgents = false;
-
-  let showUpgradingAgentsStatus = false;
-  let upgradingAgents = false;
-
-  let url;
-  let authToken;
-  $: activeWebsocketConn = undefined;
-  let activeWebsocket;
-  let timerWebsocketRenewal;
   let agentsStatusStarted = [];
   let agentsStatusCompleted = [];
   let agentsStatusFailed = [];
   let startedStatusStyling = "statusSelected";
   let completedStatusStyling = "statusNotSelected";
   let failedStatusStyling = "statusNotSelected";
-  // let startedStatusStyling = "";
-  // let completedStatusStyling = "";
-  // let failedStatusStyling = "";
 
   let rootEl: HTMLElement;
   let width: number | null = null;
@@ -198,8 +193,7 @@
     if (activeWebsocketConn) {
       activeWebsocketConn.close();
     }
-    activeWebsocketConn = new WebSocket(url);
-    // activeWebsocketConn = new WebSocket(url, "change-notifications");
+    activeWebsocketConn = new WebSocket(url, "change-notifications");
 
     activeWebsocketConn.onerror = (event) => {
       activeWebsocket = false;
