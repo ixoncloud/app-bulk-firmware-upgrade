@@ -1,7 +1,5 @@
-.startUpgradeButtonStyleEnabled,
-.startUpgradeButtonStyleDisabled,
-.startUpgradeButtonStyleStarting,
-.startUpgradeButtonStyleCompleted {
+.startInstallationButtonStyleEnabled,
+.startInstallationButtonStyleDisabled {
   float: right;
   width: 280px;
   height: 37px;
@@ -12,13 +10,13 @@
   font-family: Roboto, Helvetica Neue, sans-serif;
 }
 
-.startUpgradeButtonStyleEnabled {
+.startInstallationButtonStyleEnabled {
   cursor: pointer;
   background-color: #1059d2; // var(--accent); // --accent --primary
   color: white; // var(--accent-color);
 }
 
-.startUpgradeButtonStyleDisabled {
+.startInstallationButtonStyleDisabled {
   cursor: auto;
   background-color: rgba(0, 0, 0, 0.12);
   color: var(--body-color);

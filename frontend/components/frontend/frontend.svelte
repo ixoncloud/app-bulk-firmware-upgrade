@@ -12,10 +12,10 @@
   let timerWebsocketRenewal;
 
   let state: number;
-  let passedPermissionsCheck = undefined;
+  let agentsAllowedToUpgrade;
   let searchingFirmware = true;
   let searchingAgents = false;
-  let upgradingAgents = false;
+  let installingFirmware = false;
 
   let selectFirmwareButtonText = "";
   let selectFirmwareButtonTextLong = "";
@@ -25,26 +25,27 @@
   let eligibleAgents = [];
   let disableFirmwareSelect = false;
 
-  let startUpgradeButtonText = "";
-  let startUpgradeButtonTextLong = "";
-  let startUpgradeButtonTextShort = "";
-  let startUpgradeButtonStyle = "";
-  let upgradeStatusText = "";
-  let upgradeStatusTextLong = "";
-  let upgradeStatusTextShort = "";
-  const upgradeBatchSize = 5;
+  let startInstallationButtonText = "";
+  let startInstallationButtonTextLong = "";
+  let startInstallationButtonTextShort = "";
+  let startInstallationButtonStyle = "";
+  let installationStatusText = "";
+  let installationStatusTextLong = "";
+  let installationStatusTextShort = "";
+  const eligibleAgentsBatchSize = 5;
   let eligibleAgentsBatch = [];
-  let disableStartUpgrade = true;
+  let disableStartInstallation = true;
 
   let tableAgentsStatus: number;
   let tableAgents = [];
 
-  let showUpgradingAgentsStatus = false;
-  let informUpgradeStatusTitleText = "";
-  let informUpgradeStatusMessageText = "";
-  let upgradeStatusTitleStyling = "";
+  let showInstallingFirmwareStatus = false;
+  let informInstallationStatusTitleText = "";
+  let informInstallationStatusMessageText = "";
+  let installationStatusTitleStyling = "";
   let spinnerRowStyling = "";
   let agentsStatusStarted = [];
+  let agentsStatusStartedBackup = [];
   let agentsStatusCompleted = [];
   let agentsStatusFailed = [];
   let startedStatusStyling = "statusSelected";
@@ -62,7 +63,7 @@
   }
 
   enum State {
-    SearchingFirmware = 1,
+    CheckingPermissions = 1,
     WaitingFirmwareSelect = 2,
     SearchingDevices = 3,
     NoDevicesFound = 4,
@@ -76,7 +77,7 @@
   }
 
   onMount(async () => {
-    state = State.SearchingFirmware; // Waiting for firmware selection
+    state = State.CheckingPermissions; // Waiting for firmware selection
     disableFirmwareSelect = true;
     searchingFirmware = true; // Show spinner
     width = rootEl.getBoundingClientRect().width;
@@ -89,15 +90,17 @@
 
     client = context.createBackendComponentClient();
     response = await client.call("functions.checkUserPermissions");
-    passedPermissionsCheck = response.data;
-
-    if (passedPermissionsCheck) {
+    agentsAllowedToUpgrade = response.data;
+    if (agentsAllowedToUpgrade.length !== 0) {
       response = await client.call("functions.getFirmwareVersions");
       firmwareList = response.data;
       disableFirmwareSelect = false;
+      state = State.WaitingFirmwareSelect; // Waiting for firmware selection
+    } else {
+      // No devices found where user has manage agents permission
+      state = State.NotAllowed;
     }
     searchingFirmware = false; // Hide spinner
-    state = State.WaitingFirmwareSelect; // Waiting for firmware selection
 
     return () => {
       resizeObserver.unobserve(rootEl);
@@ -107,28 +110,41 @@
 
   async function selectVersionAndGetRouters(): Promise<void> {
     state = State.SearchingDevices; // Firmware selected, searching devices
-    upgradingAgents = false;
+    installingFirmware = false;
     eligibleAgents = [];
     agentsStatusStarted = [];
     agentsStatusCompleted = [];
     agentsStatusFailed = [];
-    disableStartUpgrade = true;
+    disableStartInstallation = true;
     searchingAgents = true; // Show spinner
     if (activeWebsocketConn) {
       activeWebsocketConn.close();
     }
     activeWebsocket = undefined;
-    response = await client.call("functions.selectVersionAndGetRouters", {
-      firmware: selectedFirmware,
-    });
-    eligibleAgents = response.data;
+    for (let i = 0; i < agentsAllowedToUpgrade.length; i += 1) {
+      if (
+        agentsAllowedToUpgrade[i].type.publicId ===
+        selectedFirmware.agent_type_publicId
+      ) {
+        if (
+          agentsAllowedToUpgrade[i].lastSeenAgentUserAgent.firmwareVersion !==
+          selectedFirmware.version
+        ) {
+          eligibleAgents = eligibleAgents.concat(agentsAllowedToUpgrade[i]);
+        }
+      }
+    }
+    // response = await client.call("functions.selectVersionAndGetRouters", {
+    //   firmware: selectedFirmware,
+    // });
+    // eligibleAgents = response.data;
     searchingAgents = false; // Hide spinner
     if (eligibleAgents.length === 0) {
       state = State.NoDevicesFound; // No devices found
-      disableStartUpgrade = true;
+      disableStartInstallation = true;
     } else {
-      state = State.DevicesFound; // Devices found, waiting for upgrade start
-      disableStartUpgrade = false;
+      state = State.DevicesFound; // Devices found, waiting for firmware installation start
+      disableStartInstallation = false;
     }
     tableAgents = eligibleAgents;
   }
@@ -138,7 +154,7 @@
     availableInDays,
   ): void {
     state = State.WaitingFirmwareSelect;
-    disableStartUpgrade = true;
+    disableStartInstallation = true;
     selectedFirmware = "";
     context.openAlertDialog({
       title: "Available soon",
@@ -152,22 +168,26 @@
     });
   }
 
-  async function startFirmwareUpgrade(): Promise<void> {
+  async function startFirmwareInstallation(): Promise<void> {
     state = State.StartInstall;
     establishWebsocketConn();
     disableFirmwareSelect = true;
-    disableStartUpgrade = true;
-    upgradingAgents = true;
+    disableStartInstallation = true;
+    installingFirmware = true;
     changeTableAgents(TableAgentsStatus.Started);
     agentsStatusStarted = [];
-    for (let i = 0; i < eligibleAgents.length; i += upgradeBatchSize) {
-      eligibleAgentsBatch = eligibleAgents.slice(i, i + upgradeBatchSize);
-      await client.call("functions.startFirmwareUpgrade", {
+    for (let i = 0; i < eligibleAgents.length; i += eligibleAgentsBatchSize) {
+      eligibleAgentsBatch = eligibleAgents.slice(
+        i,
+        i + eligibleAgentsBatchSize,
+      );
+      await client.call("functions.startFirmwareInstallation", {
         firmware: selectedFirmware,
         agents: eligibleAgentsBatch,
       });
       agentsStatusStarted = agentsStatusStarted.concat(eligibleAgentsBatch);
     }
+    agentsStatusStartedBackup = agentsStatusStarted;
   }
 
   async function establishWebsocketConn(): Promise<void> {
@@ -198,6 +218,7 @@
     activeWebsocketConn.onerror = (event) => {
       activeWebsocket = false;
       state = State.NoWebsocketStartingInstall;
+      agentsStatusStarted = agentsStatusStartedBackup;
     };
 
     activeWebsocketConn.onopen = (event) => {
@@ -238,20 +259,22 @@
           // New firmware is
           let agentFirmwareNew =
             response.data.lastSeenAgentUserAgent.firmwareVersion;
-
           // Find old firmware
           let indexInAgentsStatusStarted = agentsStatusStarted.findIndex(
             (agent) => agent.publicId == agentPubId,
           );
           let agentDetails = agentsStatusStarted[indexInAgentsStatusStarted];
-          let agentFirmwareOld = agentDetails.firmware;
+          let agentFirmwareOld =
+            agentDetails.lastSeenAgentUserAgent.firmwareVersion;
 
           if (agentFirmwareNew != agentFirmwareOld) {
-            // firmware upgrade succeeded
+            // firmware installation succeeded
             let found = agentsStatusCompleted.find(
               (agent) => agent.publicId == agentPubId,
             );
             if (!found) {
+              agentDetails.lastSeenAgentUserAgent.firmwareVersion =
+                agentFirmwareNew;
               agentsStatusCompleted =
                 agentsStatusCompleted.concat(agentDetails);
             }
@@ -264,7 +287,7 @@
                 (m) => m !== agentInAgentsStatusStarted,
               );
               if (agentsStatusStarted.length == 0) {
-                upgradingAgents = false;
+                installingFirmware = false;
                 disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
@@ -278,7 +301,7 @@
               }
             }
           } else {
-            // firmware upgrade failed
+            // firmware installation failed
             let found = agentsStatusFailed.find(
               (agent) => agent.publicId == agentPubId,
             );
@@ -294,7 +317,7 @@
                 (m) => m !== agentInAgentsStatusStarted,
               );
               if (agentsStatusStarted.length == 0) {
-                upgradingAgents = false;
+                installingFirmware = false;
                 disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
@@ -314,16 +337,17 @@
   }
 
   const textTimeIndication =
-    "After an upgrade has started, it usually takes 2 to 5 minutes for the upgrade to complete. Do not turn off or unplug the device during this period.\n\n";
+    "After an installation has started, it usually takes 2 to 5 minutes for the installation to complete. Do not turn off or unplug the device during this period.\n\n";
   const textWebsocketError =
-    "Upgrade progression cannot be displayed because the WebSocket connection failed. Please contact your local IT to allow your browser's WebSocket connection for future uses of this app and in the meantime see the Portal or Fleet Manager for each device's connection status and firmware version.\n\n";
+    "Installation progression cannot be displayed because the WebSocket connection failed. Please contact your local IT to allow your browser's WebSocket connection for future uses of this app and in the meantime see the Portal or Fleet Manager for each device's connection status and firmware version.\n\n";
   const textStartedAndFailedDevices =
-    'Devices with upgrade status "Started" for longer than 30 minutes (these devices have not come back online) or upgrade status "Failed" (these devices have come back online with their old firmware version) have not been able to succeed their firmware upgrade.\n\n';
+    'Devices with status "Started" for longer than 30 minutes (these devices have not come back online) or status "Failed" (these devices have come back online with their old firmware version) have not been able to succeed their firmware installation.\n\n';
   const textFailedDevices =
-    'Devices with upgrade status "Failed" (these devices have come back online with their old firmware version) have not been able to succeed their firmware upgrade.\n\n';
-  const textCompletedDevices = "All devices were successfully upgraded.";
+    'Devices with status "Failed" (these devices have come back online with their old firmware version) have not been able to succeed their firmware installation.\n\n';
+  const textCompletedDevices =
+    "The firmware was successfully installed on all devices.";
   const textReferenceSupportWebsite =
-    'The "Firmware upgrade" article on our support website provides help with any unsuccessful firmware upgrades (support.ixon.cloud).';
+    'The "Firmware upgrade" article on our support website provides help with any unsuccessful firmware installations (support.ixon.cloud).';
 
   $: firmwareSelected(selectedFirmware);
   function firmwareSelected(_selectedFirmware): void {
@@ -338,19 +362,19 @@
       }
     }
   }
-  $: showUpgradingAgentsStatusBanner(activeWebsocket, agentsStatusStarted);
-  function showUpgradingAgentsStatusBanner(
+  $: showInstallingFirmwareStatusBanner(activeWebsocket, agentsStatusStarted);
+  function showInstallingFirmwareStatusBanner(
     _activeWebsocket: Boolean,
     _agentsStatusStarted,
   ): void {
     if (_activeWebsocket != undefined) {
-      showUpgradingAgentsStatus = true;
+      showInstallingFirmwareStatus = true;
     } else {
-      showUpgradingAgentsStatus = false;
+      showInstallingFirmwareStatus = false;
     }
     if (_activeWebsocket != undefined && _activeWebsocket == false) {
       if (_agentsStatusStarted.length === eligibleAgents.length) {
-        upgradingAgents = false;
+        installingFirmware = false;
         disableFirmwareSelect = false;
         state = State.NoWebsocketStartedInstall;
       }
@@ -359,108 +383,108 @@
   $: updateState(state);
   function updateState(_state: number): void {
     switch (_state) {
-      case State.SearchingFirmware:
+      case State.CheckingPermissions:
         // Searching firmware
-        selectFirmwareButtonTextLong = "Searching firmware";
+        selectFirmwareButtonTextLong = "Checking permissions";
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
-        startUpgradeButtonTextLong = "No firmware selected";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
+        startInstallationButtonTextLong = "No firmware selected";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
+        startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
         break;
       case State.WaitingFirmwareSelect:
         // Waiting for firmware selection
         selectFirmwareButtonTextLong = "Select target firmware";
         selectFirmwareButtonTextShort = "Select firmware";
-        startUpgradeButtonTextLong = "No firmware selected";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
+        startInstallationButtonTextLong = "No firmware selected";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
         break;
       case State.SearchingDevices:
         // Firmware selected, searching devices
-        startUpgradeButtonTextLong = "Searching for eligible devices";
-        startUpgradeButtonTextShort = "Searching devices";
-        startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
+        startInstallationButtonTextLong = "Searching for eligible devices";
+        startInstallationButtonTextShort = "Searching devices";
+        startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
         break;
       case State.NoDevicesFound:
         // No devices found
-        startUpgradeButtonTextLong = "No eligible devices found";
-        startUpgradeButtonTextShort = "No devices found";
+        startInstallationButtonTextLong = "No eligible devices found";
+        startInstallationButtonTextShort = "No devices found";
+        startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
         break;
       case State.DevicesFound:
-        // Devices found, waiting for upgrade start
-        startUpgradeButtonTextLong =
-          "Upgrade all devices (" + eligibleAgents.length + ")";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        startUpgradeButtonStyle = "startUpgradeButtonStyleEnabled";
+        // Devices found, waiting for installation start
+        startInstallationButtonTextLong =
+          "Install on all devices (" + eligibleAgents.length + ")";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
+        startInstallationButtonStyle = "startInstallationButtonStyleEnabled";
         break;
       case State.StartInstall:
         selectFirmwareButtonTextLong = selectedFirmware["version"];
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
-        startUpgradeButtonStyle = "startUpgradeButtonStyleDisabled";
-        upgradeStatusTitleStyling = "upgradeStatusTitleStyle";
+        startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
+        installationStatusTitleStyling = "installationStatusTitleStyle";
         break;
       case State.InstallingFirmware:
-        startUpgradeButtonTextLong =
-          "Upgrading " + eligibleAgents.length + " devices";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        upgradeStatusTextLong = "Upgrading firmware";
-        upgradeStatusTextShort = "Upgrading";
-        informUpgradeStatusTitleText = "Upgrading firmware";
-        informUpgradeStatusMessageText =
+        installationStatusTextLong = "Installing firmware";
+        installationStatusTextShort = "Installing";
+        informInstallationStatusTitleText = "Installing firmware";
+        informInstallationStatusMessageText =
           textTimeIndication +
           textStartedAndFailedDevices +
           textReferenceSupportWebsite;
         break;
       case State.InstalledFirmware:
-        startUpgradeButtonTextLong =
-          "Upgraded " + eligibleAgents.length + " devices";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        upgradeStatusTextLong = "Upgrades finished";
-        upgradeStatusTextShort = upgradeStatusTextLong;
+        // startInstallationButtonTextLong =
+        //   "Upgraded " + eligibleAgents.length + " devices";
+        // startInstallationButtonTextShort = startInstallationButtonTextLong;
+        installationStatusTextLong = "Installations finished";
+        installationStatusTextShort = installationStatusTextLong;
         if (agentsStatusFailed.length === 0) {
-          informUpgradeStatusTitleText = "Upgrades finished";
-          informUpgradeStatusMessageText = textCompletedDevices;
+          informInstallationStatusTitleText = "Installations finished";
+          informInstallationStatusMessageText = textCompletedDevices;
         } else {
-          informUpgradeStatusTitleText = "Upgrades finished";
-          informUpgradeStatusMessageText =
+          informInstallationStatusTitleText = "Installations finished";
+          informInstallationStatusMessageText =
             textFailedDevices + textReferenceSupportWebsite;
         }
         if (isNarrow) {
-          upgradeStatusTitleStyling = "upgradeStatusTitleStyleIsNarrow";
+          installationStatusTitleStyling =
+            "installationStatusTitleStyleIsNarrow";
         } else {
-          upgradeStatusTitleStyling = "upgradeStatusTitleStyle";
+          installationStatusTitleStyling = "installationStatusTitleStyle";
         }
         break;
       case State.NoWebsocketStartingInstall:
-        startUpgradeButtonTextLong =
-          "Starting " + eligibleAgents.length + " upgrades";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        upgradeStatusTextLong = "Starting upgrades";
-        upgradeStatusTextShort = "Upgrading";
-        informUpgradeStatusTitleText = "Starting upgrades";
-        informUpgradeStatusMessageText =
+        // startInstallationButtonTextLong =
+        //   "Starting " + eligibleAgents.length + " upgrades";
+        // startInstallationButtonTextShort = startInstallationButtonTextLong;
+        installationStatusTextLong = "Installing firmware";
+        installationStatusTextShort = "Installing";
+        informInstallationStatusTitleText = "Installing firmware";
+        informInstallationStatusMessageText =
           textTimeIndication + textWebsocketError + textReferenceSupportWebsite;
         break;
       case State.NoWebsocketStartedInstall:
-        startUpgradeButtonTextLong =
-          "All " + agentsStatusStarted.length + " upgrades started";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
-        upgradeStatusTextLong = "All upgrades started";
-        upgradeStatusTextShort = "All upgrades started";
-        informUpgradeStatusTitleText = "All upgrades have started";
-        informUpgradeStatusMessageText =
+        // startInstallationButtonTextLong =
+        //   "All " + agentsStatusStarted.length + " upgrades started";
+        // startInstallationButtonTextShort = startInstallationButtonTextLong;
+        installationStatusTextLong = "All installations started";
+        installationStatusTextShort = "All installations started";
+        informInstallationStatusTitleText = "All installations have started";
+        informInstallationStatusMessageText =
           textTimeIndication + textWebsocketError + textReferenceSupportWebsite;
         if (isNarrow) {
-          upgradeStatusTitleStyling = "upgradeStatusTitleStyleIsNarrow";
+          installationStatusTitleStyling =
+            "installationStatusTitleStyleIsNarrow";
         } else {
-          upgradeStatusTitleStyling = "upgradeStatusTitleStyle";
+          installationStatusTitleStyling = "installationStatusTitleStyle";
         }
         break;
       case State.NotAllowed:
         // No permission
-        selectFirmwareButtonTextLong = "- Not allowed -";
+        selectFirmwareButtonTextLong = "- Insufficient permissions -";
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
-        startUpgradeButtonTextLong = "- Insufficient permissions -";
-        startUpgradeButtonTextShort = startUpgradeButtonTextLong;
+        // startInstallationButtonTextLong = "- Insufficient permissions -";
+        // startInstallationButtonTextShort = startInstallationButtonTextLong;
         break;
     }
   }
@@ -503,21 +527,21 @@
   $: selectFirmwareButtonText = isNarrow
     ? selectFirmwareButtonTextShort
     : selectFirmwareButtonTextLong;
-  $: startUpgradeButtonText = isNarrow
-    ? startUpgradeButtonTextShort
-    : startUpgradeButtonTextLong;
+  $: startInstallationButtonText = isNarrow
+    ? startInstallationButtonTextShort
+    : startInstallationButtonTextLong;
   $: tableWrapperStyling = isNarrow ? "tableWrapperIsNarrow" : "tableWrapper";
   $: hrBottomStyling = isNarrow ? "hrBottomIsNarrow" : "hrBottom";
-  $: upgradeStatusText = isNarrow
-    ? upgradeStatusTextShort
-    : upgradeStatusTextLong;
+  $: installationStatusText = isNarrow
+    ? installationStatusTextShort
+    : installationStatusTextLong;
   $: hrRightStyling = isNarrow ? "hrRightIsNarrow" : "hrRight";
   $: spinnerRowStyling = isNarrow ? "nonSpinnerRow" : "spinnerRow";
 
-  function informUpgradeStatus() {
+  function informInstallationStatus() {
     context.openAlertDialog({
-      title: informUpgradeStatusTitleText,
-      message: informUpgradeStatusMessageText,
+      title: informInstallationStatusTitleText,
+      message: informInstallationStatusMessageText,
       buttonText: "I understand",
     });
   }
@@ -530,10 +554,10 @@
     </div>
     <div class="componentLine">
       <!-- Exceptions that disallow firmware selection -->
-      {#if searchingFirmware || !passedPermissionsCheck || disableFirmwareSelect}
+      {#if searchingFirmware || disableFirmwareSelect}
         <button
           disabled
-          class={startUpgradeButtonStyle}
+          class={startInstallationButtonStyle}
           class:narrowWidth={isNarrow}
           type="button"
         >
@@ -578,10 +602,10 @@
       {/if}
       <div class="buttonPadding" />
       <button
-        disabled={disableStartUpgrade}
-        class={startUpgradeButtonStyle}
+        disabled={disableStartInstallation}
+        class={startInstallationButtonStyle}
         class:narrowWidth={isNarrow}
-        on:click={startFirmwareUpgrade}
+        on:click={startFirmwareInstallation}
         type="button"
       >
         <div class="spinnerRow">
@@ -600,7 +624,7 @@
               </div>
             </div>
           {/if}
-          {startUpgradeButtonText}
+          {startInstallationButtonText}
         </div>
       </button>
     </div>
@@ -620,7 +644,7 @@
             <tr>
               <td>{agent.name}</td>
               <td>{agent.serialNumber}</td>
-              <td>{agent.firmware}</td>
+              <td>{agent.lastSeenAgentUserAgent.firmwareVersion}</td>
             </tr>
           {/each}
         </tbody>
@@ -628,11 +652,11 @@
     </div>
     <div class={hrBottomStyling} />
     <div class="statusWrapper">
-      {#if showUpgradingAgentsStatus}
+      {#if showInstallingFirmwareStatus}
         <span class={spinnerRowStyling}>
           <button
             class="iconButton"
-            on:click={informUpgradeStatus}
+            on:click={informInstallationStatus}
             type="button"
             ><svg viewBox="0 0 24 24" width="24" height="24"
               ><path
@@ -640,10 +664,10 @@
               /><path d="M11 9h2V7h-2v2zm0 8h2v-6h-2v6z" /></svg
             >
           </button>
-          <span class={upgradeStatusTitleStyling}>
-            {upgradeStatusText}
+          <span class={installationStatusTitleStyling}>
+            {installationStatusText}
           </span>
-          {#if upgradingAgents}
+          {#if installingFirmware}
             <span class="spinnerSpacingLeftBottom">
               <div class="spinner">
                 <div class="spinnerDark">
