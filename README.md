@@ -1,6 +1,6 @@
-# IXON Service Logbook
+# IXON Bulk Firmware Upgrade
 
-Welcome to the workspace for developing the backend and frontend component for the IXON Service Logbook.
+Welcome to the workspace for developing the backend and frontend component for the IXON Bulk Firmware Upgrade.
 
 ## Basic information
 
@@ -24,5 +24,5 @@ make run
 ```sh
 # Run the frontend
 npm install
-npx cdk simulate service-logbook
+npx cdk simulate frontend
 ```
