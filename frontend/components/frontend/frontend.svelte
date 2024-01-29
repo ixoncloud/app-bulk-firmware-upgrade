@@ -288,7 +288,7 @@
               );
               if (agentsStatusStarted.length == 0) {
                 installingFirmware = false;
-                disableFirmwareSelect = false;
+                // disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
                 if (agentsStatusCompleted.length != 0) {
@@ -318,7 +318,7 @@
               );
               if (agentsStatusStarted.length == 0) {
                 installingFirmware = false;
-                disableFirmwareSelect = false;
+                // disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
                 if (agentsStatusCompleted.length != 0) {
@@ -375,7 +375,7 @@
     if (_activeWebsocket != undefined && _activeWebsocket == false) {
       if (_agentsStatusStarted.length === eligibleAgents.length) {
         installingFirmware = false;
-        disableFirmwareSelect = false;
+        // disableFirmwareSelect = false;
         state = State.NoWebsocketStartedInstall;
       }
     }
@@ -420,12 +420,15 @@
       case State.StartInstall:
         selectFirmwareButtonTextLong = selectedFirmware["version"];
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
+        startInstallationButtonTextLong =
+          "Installing on all devices (" + eligibleAgents.length + ")";
+        startInstallationButtonTextShort = "Installing firmware";
+        installationStatusTextLong = "Installing firmware";
+        installationStatusTextShort = "Installing";
         startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
         installationStatusTitleStyling = "installationStatusTitleStyle";
         break;
       case State.InstallingFirmware:
-        installationStatusTextLong = "Installing firmware";
-        installationStatusTextShort = "Installing";
         informInstallationStatusTitleText = "Installing firmware";
         informInstallationStatusMessageText =
           textTimeIndication +
@@ -433,9 +436,8 @@
           textReferenceSupportWebsite;
         break;
       case State.InstalledFirmware:
-        // startInstallationButtonTextLong =
-        //   "Upgraded " + eligibleAgents.length + " devices";
-        // startInstallationButtonTextShort = startInstallationButtonTextLong;
+        startInstallationButtonTextLong = "Installations finished";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
         installationStatusTextLong = "Installations finished";
         installationStatusTextShort = installationStatusTextLong;
         if (agentsStatusFailed.length === 0) {
@@ -454,21 +456,17 @@
         }
         break;
       case State.NoWebsocketStartingInstall:
-        // startInstallationButtonTextLong =
-        //   "Starting " + eligibleAgents.length + " upgrades";
-        // startInstallationButtonTextShort = startInstallationButtonTextLong;
-        installationStatusTextLong = "Installing firmware";
-        installationStatusTextShort = "Installing";
+        startInstallationButtonTextLong = "Installing firmware";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
         informInstallationStatusTitleText = "Installing firmware";
         informInstallationStatusMessageText =
           textTimeIndication + textWebsocketError + textReferenceSupportWebsite;
         break;
       case State.NoWebsocketStartedInstall:
-        // startInstallationButtonTextLong =
-        //   "All " + agentsStatusStarted.length + " upgrades started";
-        // startInstallationButtonTextShort = startInstallationButtonTextLong;
-        installationStatusTextLong = "All installations started";
-        installationStatusTextShort = "All installations started";
+        startInstallationButtonTextLong = "Installations started";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
+        installationStatusTextLong = "Installations started";
+        installationStatusTextShort = installationStatusTextLong;
         informInstallationStatusTitleText = "All installations have started";
         informInstallationStatusMessageText =
           textTimeIndication + textWebsocketError + textReferenceSupportWebsite;
@@ -483,8 +481,8 @@
         // No permission
         selectFirmwareButtonTextLong = "- Insufficient permissions -";
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
-        // startInstallationButtonTextLong = "- Insufficient permissions -";
-        // startInstallationButtonTextShort = startInstallationButtonTextLong;
+        startInstallationButtonTextLong = "- Insufficient permissions -";
+        startInstallationButtonTextShort = startInstallationButtonTextLong;
         break;
     }
   }
