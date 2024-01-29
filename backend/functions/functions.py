@@ -6,148 +6,6 @@ import datetime
 
 
 @FunctionContext.expose
-def checkUserPermissions(context: FunctionContext, **kwargs: dict[str, str]):
-    del kwargs
-
-    # Get all roles
-    role_list = []
-    role_with_permission_list = {}
-    more_after = None
-    all_roles_checked = False
-    while all_roles_checked == False:
-        response = context.api_client.get(
-            'RoleList',
-            query={
-                'page-size': '1000',
-                'page-after': more_after,
-                'fields': 'name,publicId,permissions'
-            }
-        )
-        role_list = role_list + response['data']
-        more_after = response['moreAfter']
-        if more_after is None:
-            all_roles_checked = True
-            break
-    sufficient_permissions = False
-    for role in role_list:
-        if role['permissions'] is not None:
-            company_wide_role = False
-            manage_agents_role = False
-            company_wide_manage_agents = False
-            for permission in role['permissions']:
-                # Role is company admin
-                if permission['publicId'] == 'COMPANY_ADMIN':
-                    company_wide_role = True
-                    manage_agents_role = True
-                    sufficient_permissions = True
-                    break
-                # Role is company-wide
-                if permission['publicId'] == 'COMPANY_WIDE_ROLE':
-                    company_wide_role = True
-                    continue
-                # Role provides "manage agents" permission
-                if permission['publicId'] == 'MANAGE_AGENT':
-                    manage_agents_role = True
-                    sufficient_permissions = True
-                    role_with_permission_list[role['publicId']] = role
-                    continue
-            # Company wide role providing manage devices
-            if company_wide_role and manage_agents_role:
-                company_wide_manage_agents = True
-                break
-    
-    # No role found with manage agents, insufficient permissions
-    if sufficient_permissions == False:
-        return([])
-
-    # Get all agents
-    agent_list = []
-    more_after = None
-    all_agents_checked = False
-    while all_agents_checked == False:
-        response = context.api_client.get(
-            'AgentList',
-            query={
-                'page-size': '1000',
-                'page-after': more_after,
-                'fields': 'publicId,name,serialNumber,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer,memberships.group.publicId',
-                'filters': ['isnotnull(mdrServer)']
-        })
-        agent_list = agent_list + response['data']
-        more_after = response['moreAfter']
-        if more_after is None:
-            all_agents_checked = True
-            break
-    
-    # Company-wide role with manage permissions, no need to continue permission checks or filtering
-    if company_wide_manage_agents == True:
-        agent_list.sort(key=lambda i: i['name'])
-        return(agent_list)
-
-    # Get all device-specific groups
-    group_list = []
-    dev_spec_group_list = {}
-    more_after = None
-    all_groups_checked = False
-    while all_groups_checked == False:
-        response = context.api_client.get(
-            'GroupList',
-            query={
-                'page-size': '1000',
-                'page-after': more_after,
-                'fields': 'name,publicId,agent.publicId'
-            }
-        )
-        group_list = group_list + response['data']
-        more_after = response['moreAfter']
-        if more_after is None:
-            all_groups_checked = True
-            break
-    for group in group_list:
-        # Check if device-specific group
-        if group['agent'] is not None:
-            dev_spec_group_list[group['publicId']] = group['agent']['publicId']
-
-    # Get user permissions
-    response = context.api_client.get(
-        'MyUser',
-        query={'fields': 'name,publicId'}
-    )
-    selfPublicId = response['data']['publicId']
-    response = context.api_client.get(
-        'User',
-        url_args={'publicId': selfPublicId},
-        query={'fields': 'name,memberships.group.publicId,memberships.role.publicId'}
-    )
-    memberships = response['data']['memberships']
-
-    # Check per membership
-    agent_list_filtered = []
-    for membership in memberships:
-        if membership['role'] is not None:
-            if membership['role']['publicId'] in role_with_permission_list:
-                # Device specific membership
-                if membership['group']['publicId'] in dev_spec_group_list:
-                    # Find agent
-                    for agent in agent_list:
-                        if agent['publicId'] == dev_spec_group_list[membership['group']['publicId']]:
-                            agent_list_filtered.append(agent)
-                            agent_list.remove(agent)
-                            break
-                # Group specific membership
-                else:
-                    # Find agents in group
-                    for agent in agent_list:
-                        for agent_membership in agent['memberships']:
-                            if agent_membership['group']['publicId'] == membership['group']['publicId']:
-                                agent_list_filtered.append(agent)
-                                agent_list.remove(agent)
-                                break
-    
-    return(agent_list_filtered)
-
-
-@FunctionContext.expose
 def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
     del kwargs
     firmware_list = []
@@ -234,6 +92,149 @@ def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
                     'days_remaining':days_remaining
                 })
     return(firmware_list_sorted)
+
+
+@FunctionContext.expose
+def getRouters(context: FunctionContext, firmware, **kwargs: dict[str, str]):
+    del kwargs
+
+    # Get all roles
+    role_list = []
+    role_with_permission_list = {}
+    more_after = None
+    all_roles_checked = False
+    while all_roles_checked == False:
+        response = context.api_client.get(
+            'RoleList',
+            query={
+                'page-size': '1000',
+                'page-after': more_after,
+                'fields': 'name,publicId,permissions'
+            }
+        )
+        role_list = role_list + response['data']
+        more_after = response['moreAfter']
+        if more_after is None:
+            all_roles_checked = True
+            break
+    sufficient_permissions = False
+    for role in role_list:
+        if role['permissions'] is not None:
+            company_wide_role = False
+            manage_agents_role = False
+            company_wide_manage_agents = False
+            for permission in role['permissions']:
+                # Role is company admin
+                if permission['publicId'] == 'COMPANY_ADMIN':
+                    company_wide_role = True
+                    manage_agents_role = True
+                    sufficient_permissions = True
+                    break
+                # Role is company-wide
+                if permission['publicId'] == 'COMPANY_WIDE_ROLE':
+                    company_wide_role = True
+                    continue
+                # Role provides "manage agents" permission
+                if permission['publicId'] == 'MANAGE_AGENT':
+                    manage_agents_role = True
+                    sufficient_permissions = True
+                    role_with_permission_list[role['publicId']] = role
+                    continue
+            # Company wide role providing manage devices
+            if company_wide_role and manage_agents_role:
+                company_wide_manage_agents = True
+                break
+    
+    # No role found with manage agents, insufficient permissions, no need to search for devices
+    if sufficient_permissions == False:
+        return([])
+
+    # Get all agents
+    agent_list = []
+    more_after = None
+    all_agents_checked = False
+    while all_agents_checked == False:
+        response = context.api_client.get(
+            'AgentList',
+            query={
+                'page-size': '1000',
+                'page-after': more_after,
+                'fields': 'publicId,name,serialNumber,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer,memberships.group.publicId',
+                'filters': ['eq(type.publicId,"' + firmware['agent_type_publicId'] + '")', 'ne(lastSeenAgentUserAgent.firmwareVersion,"' + firmware['version'] + '")', 'isnotnull(mdrServer)']
+        })
+        agent_list = agent_list + response['data']
+        more_after = response['moreAfter']
+        if more_after is None:
+            all_agents_checked = True
+            break
+    
+    # Company-wide role with manage permissions, no need to continue permission checks
+    if company_wide_manage_agents == True:
+        agent_list.sort(key=lambda i: i['name'])
+        return(agent_list)
+
+    # Get all device-specific groups
+    group_list = []
+    dev_spec_group_list = {}
+    more_after = None
+    all_groups_checked = False
+    while all_groups_checked == False:
+        response = context.api_client.get(
+            'GroupList',
+            query={
+                'page-size': '1000',
+                'page-after': more_after,
+                'fields': 'name,publicId,agent.publicId'
+            }
+        )
+        group_list = group_list + response['data']
+        more_after = response['moreAfter']
+        if more_after is None:
+            all_groups_checked = True
+            break
+    for group in group_list:
+        # Check if device-specific group
+        if group['agent'] is not None:
+            dev_spec_group_list[group['publicId']] = group['agent']['publicId']
+
+    # Get user permissions
+    response = context.api_client.get(
+        'MyUser',
+        query={'fields': 'name,publicId'}
+    )
+    selfPublicId = response['data']['publicId']
+    response = context.api_client.get(
+        'User',
+        url_args={'publicId': selfPublicId},
+        query={'fields': 'name,memberships.group.publicId,memberships.role.publicId'}
+    )
+    memberships = response['data']['memberships']
+
+    # Check per membership
+    agent_list_filtered = []
+    for membership in memberships:
+        if membership['role'] is not None:
+            if membership['role']['publicId'] in role_with_permission_list:
+                # Device specific membership
+                if membership['group']['publicId'] in dev_spec_group_list:
+                    # Find agent
+                    for agent in agent_list:
+                        if agent['publicId'] == dev_spec_group_list[membership['group']['publicId']]:
+                            agent_list_filtered.append(agent)
+                            agent_list.remove(agent)
+                            break
+                # Group specific membership
+                else:
+                    # Find agents in group
+                    for agent in agent_list:
+                        for agent_membership in agent['memberships']:
+                            if agent_membership['group']['publicId'] == membership['group']['publicId']:
+                                agent_list_filtered.append(agent)
+                                agent_list.remove(agent)
+                                break
+    
+    agent_list_filtered.sort(key=lambda i: i['name'])
+    return(agent_list_filtered)
 
 
 @FunctionContext.expose

@@ -12,7 +12,6 @@
   let timerWebsocketRenewal;
 
   let state: number;
-  let agentsAllowedToUpgrade;
   let searchingFirmware = true;
   let searchingAgents = false;
   let installingFirmware = false;
@@ -63,7 +62,7 @@
   }
 
   enum State {
-    CheckingPermissions = 1,
+    SearchingFirmwareVersions = 1,
     WaitingFirmwareSelect = 2,
     SearchingDevices = 3,
     NoDevicesFound = 4,
@@ -73,11 +72,10 @@
     InstalledFirmware = 8,
     NoWebsocketStartingInstall = 9,
     NoWebsocketStartedInstall = 10,
-    NotAllowed = 99,
   }
 
   onMount(async () => {
-    state = State.CheckingPermissions; // Waiting for firmware selection
+    state = State.SearchingFirmwareVersions; // Waiting for firmware selection
     disableFirmwareSelect = true;
     searchingFirmware = true; // Show spinner
     width = rootEl.getBoundingClientRect().width;
@@ -89,18 +87,11 @@
     resizeObserver.observe(rootEl);
 
     client = context.createBackendComponentClient();
-    response = await client.call("functions.checkUserPermissions");
-    agentsAllowedToUpgrade = response.data;
-    if (agentsAllowedToUpgrade.length !== 0) {
-      response = await client.call("functions.getFirmwareVersions");
-      firmwareList = response.data;
-      disableFirmwareSelect = false;
-      state = State.WaitingFirmwareSelect; // Waiting for firmware selection
-    } else {
-      // No devices found where user has manage agents permission
-      state = State.NotAllowed;
-    }
+    response = await client.call("functions.getFirmwareVersions");
+    firmwareList = response.data;
+    disableFirmwareSelect = false;
     searchingFirmware = false; // Hide spinner
+    state = State.WaitingFirmwareSelect; // Waiting for firmware selection
 
     return () => {
       resizeObserver.unobserve(rootEl);
@@ -108,9 +99,10 @@
     };
   });
 
-  async function selectVersionAndGetRouters(): Promise<void> {
+  async function getRouters(): Promise<void> {
     state = State.SearchingDevices; // Firmware selected, searching devices
     installingFirmware = false;
+    tableAgents = [];
     eligibleAgents = [];
     agentsStatusStarted = [];
     agentsStatusCompleted = [];
@@ -121,23 +113,10 @@
       activeWebsocketConn.close();
     }
     activeWebsocket = undefined;
-    for (let i = 0; i < agentsAllowedToUpgrade.length; i += 1) {
-      if (
-        agentsAllowedToUpgrade[i].type.publicId ===
-        selectedFirmware.agent_type_publicId
-      ) {
-        if (
-          agentsAllowedToUpgrade[i].lastSeenAgentUserAgent.firmwareVersion !==
-          selectedFirmware.version
-        ) {
-          eligibleAgents = eligibleAgents.concat(agentsAllowedToUpgrade[i]);
-        }
-      }
-    }
-    // response = await client.call("functions.selectVersionAndGetRouters", {
-    //   firmware: selectedFirmware,
-    // });
-    // eligibleAgents = response.data;
+    response = await client.call("functions.getRouters", {
+      firmware: selectedFirmware,
+    });
+    eligibleAgents = response.data;
     searchingAgents = false; // Hide spinner
     if (eligibleAgents.length === 0) {
       state = State.NoDevicesFound; // No devices found
@@ -288,7 +267,7 @@
               );
               if (agentsStatusStarted.length == 0) {
                 installingFirmware = false;
-                // disableFirmwareSelect = false;
+                disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
                 if (agentsStatusCompleted.length != 0) {
@@ -318,7 +297,7 @@
               );
               if (agentsStatusStarted.length == 0) {
                 installingFirmware = false;
-                // disableFirmwareSelect = false;
+                disableFirmwareSelect = false;
                 state = State.InstalledFirmware;
 
                 if (agentsStatusCompleted.length != 0) {
@@ -353,7 +332,7 @@
   function firmwareSelected(_selectedFirmware): void {
     if (_selectedFirmware) {
       if (_selectedFirmware.allowed) {
-        selectVersionAndGetRouters();
+        getRouters();
       } else {
         informFirmwareNotAvailable(
           _selectedFirmware["version"],
@@ -375,7 +354,7 @@
     if (_activeWebsocket != undefined && _activeWebsocket == false) {
       if (_agentsStatusStarted.length === eligibleAgents.length) {
         installingFirmware = false;
-        // disableFirmwareSelect = false;
+        disableFirmwareSelect = false;
         state = State.NoWebsocketStartedInstall;
       }
     }
@@ -383,9 +362,9 @@
   $: updateState(state);
   function updateState(_state: number): void {
     switch (_state) {
-      case State.CheckingPermissions:
+      case State.SearchingFirmwareVersions:
         // Searching firmware
-        selectFirmwareButtonTextLong = "Checking permissions";
+        selectFirmwareButtonTextLong = "Searching firmware";
         selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
         startInstallationButtonTextLong = "No firmware selected";
         startInstallationButtonTextShort = startInstallationButtonTextLong;
@@ -477,13 +456,6 @@
           installationStatusTitleStyling = "installationStatusTitleStyle";
         }
         break;
-      case State.NotAllowed:
-        // No permission
-        selectFirmwareButtonTextLong = "- Insufficient permissions -";
-        selectFirmwareButtonTextShort = selectFirmwareButtonTextLong;
-        startInstallationButtonTextLong = "- Insufficient permissions -";
-        startInstallationButtonTextShort = startInstallationButtonTextLong;
-        break;
     }
   }
   $: changeTableAgents(
@@ -551,8 +523,7 @@
       <h3 class="componentTitle">Bulk Firmware Upgrade</h3>
     </div>
     <div class="componentLine">
-      <!-- Exceptions that disallow firmware selection -->
-      {#if searchingFirmware || disableFirmwareSelect}
+      {#if disableFirmwareSelect}
         <button
           disabled
           class={startInstallationButtonStyle}
