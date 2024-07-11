@@ -12,7 +12,7 @@ def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
     firmware_list_sorted = []
     firmware_version_list_sorted = []
     firmware_release_dates_checked_per_agent_type = []
-    agent_type_names = '"IXrouter2","IXrouter3","SecureEdge","SecureEdge Pro"'
+    agent_type_names = '"IXrouter2","IXrouter3"'
     agent_types = []
     more_after = None
     all_agent_types_checked = False
