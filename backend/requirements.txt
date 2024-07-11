@@ -1,2 +1,2 @@
-ixoncdkingress==0.0.16
+ixoncdkingress==0.0.19
 dateparser>=1.1.8
