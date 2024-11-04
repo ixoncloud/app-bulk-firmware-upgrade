@@ -20,6 +20,8 @@
   let selectFirmwareButtonTextLong = "";
   let selectFirmwareButtonTextShort = "";
   let selectedFirmware;
+  let firmwareOverview = [];
+  let agentTypeList = [];
   let firmwareList = [];
   let eligibleAgents = [];
   let disableFirmwareSelect = false;
@@ -88,7 +90,9 @@
 
     client = context.createBackendComponentClient();
     response = await client.call("functions.getFirmwareVersions");
-    firmwareList = response.data;
+    firmwareOverview = response.data;
+    agentTypeList = firmwareOverview[0];
+    firmwareList = firmwareOverview[1];
     disableFirmwareSelect = false;
     searchingFirmware = false; // Hide spinner
     state = State.WaitingFirmwareSelect; // Waiting for firmware selection
@@ -553,19 +557,15 @@
         <div class="select" class:narrowWidth={isNarrow}>
           <select bind:value={selectedFirmware}>
             <option value="" hidden>{selectFirmwareButtonText}</option>
-            <optgroup label="IXrouter3">
-              {#each firmwareList as firmware}
-                {#if firmware.version[0] == 3}
-                  <option value={firmware}>{firmware.version}</option>
-                {/if}
-              {/each}
-            </optgroup><optgroup label="IXrouter2">
-              {#each firmwareList as firmware}
-                {#if firmware.version[0] == 2}
-                  <option value={firmware}>{firmware.version}</option>
-                {/if}
-              {/each}
-            </optgroup>
+            {#each agentTypeList as agentType}
+              <optgroup label={agentType.name}>
+                {#each firmwareList as firmware}
+                  {#if firmware.agent_type_publicId == agentType.publicId}
+                    <option value={firmware}>{firmware.version}</option>
+                  {/if}
+                {/each}
+              </optgroup>
+            {/each}
           </select>
         </div>
       {/if}

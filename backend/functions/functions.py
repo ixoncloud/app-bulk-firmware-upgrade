@@ -8,32 +8,51 @@ import datetime
 @FunctionContext.expose
 def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
     del kwargs
-    firmware_list = []
-    firmware_list_sorted = []
-    firmware_version_list_sorted = []
-    firmware_release_dates_checked_per_agent_type = []
-    agent_type_names = '"IXrouter2","IXrouter3"'
+    agent_type_names_ixrouter = '"IXrouter2","IXrouter3"' # Used as exact match (in)
+    agent_type_names_secureedge = '"SecureEdge"' # Used as partial match (contains)
     agent_types = []
+    agent_types_sorted = []
     more_after = None
-    all_agent_types_checked = False
-    while all_agent_types_checked == False:
+    all_ixrouter_agent_types_checked = False
+    while all_ixrouter_agent_types_checked == False:
         response = context.api_client.get(
             'AgentTypeList',
             query={
                 'page-size': '1000',
                 'page-after': more_after,
                 'fields': 'publicId,name',
-                'filters': 'in(name,' + agent_type_names + ')'
+                'filters': 'in(name,' + agent_type_names_ixrouter + ')'
             }
         )
         agent_types = agent_types + response['data']
         more_after = response['moreAfter']
         if more_after is None:
-            all_agent_types_checked = True
+            all_ixrouter_agent_types_checked = True
+            break
+    all_secureedge_agent_types_checked = False
+    while all_secureedge_agent_types_checked == False:
+        response = context.api_client.get(
+            'AgentTypeList',
+            query={
+                'page-size': '1000',
+                'page-after': more_after,
+                'fields': 'publicId,name',
+                'filters': 'contains(name,' + agent_type_names_secureedge + ')'
+            }
+        )
+        agent_types = agent_types + response['data']
+        more_after = response['moreAfter']
+        if more_after is None:
+            all_secureedge_agent_types_checked = True
             break
     latest_firmware_found_per_agent_type = []
     today = date.today()
     # Get all firmware versions for agents
+    firmware_list = []
+    firmware_list_sorted = []
+    firmware_version_list_sorted = []
+    firmware_release_dates_checked_per_agent_type = []
+    firmware_overview = []
     for agent_type in agent_types:
         response = context.api_client.get(
             'AgentTypeFileList',
@@ -53,9 +72,9 @@ def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
                 'latest':ixrouter_firmware_version['latest'],
                 'note': ixrouter_firmware_version['notes']
             })
+    # Sort version numbers naturally
     for firmware in firmware_list:  # Make a list of version numbers only to enable natural sorting
         firmware_version_list_sorted.append(firmware['version'])
-    # Sort version numbers naturally
     firmware_version_list_sorted.sort(key=parseVersion, reverse=True)
     # Create a sorted list of dictionaries of each version
     for firmware_version in firmware_version_list_sorted:
@@ -91,7 +110,19 @@ def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
                     'allowed':firmware_allowed,
                     'days_remaining':days_remaining
                 })
-    return(firmware_list_sorted)
+    
+    # Sort agent_types
+    agent_type_pubid_sorted = []
+    for firmware in firmware_list_sorted: # To make sure the agent type is also sorted
+        for agent_type in agent_types: # Find agent type corresponding with firmware version
+            if agent_type['publicId'] == firmware['agent_type_publicId']: # Agent type found
+                if agent_type['publicId'] not in agent_type_pubid_sorted:
+                    agent_type_pubid_sorted.append(agent_type['publicId'])
+                    agent_types_sorted.append(agent_type)
+    
+    firmware_overview.append(agent_types_sorted)
+    firmware_overview.append(firmware_list_sorted)
+    return(firmware_overview)
 
 
 @FunctionContext.expose
