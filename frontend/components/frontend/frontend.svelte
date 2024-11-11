@@ -216,105 +216,118 @@
 
     activeWebsocketConn.onmessage = (event) => {
       let eventData = JSON.parse(event.data);
-      // If-statement returns true if eventData.dat exists and both mqttChangedOn and mdrServer are not null, so MQTT connected
-      if (eventData?.dat?.mqttChangedOn && eventData.dat.mdrServer) {
-        eventData.sel.forEach(async (agent) => {
-          let agentPubId = agent.pat.slice(1);
-          url = context.getApiUrl("Agent", {
-            publicId: agentPubId,
-            fields: "name,publicId,lastSeenAgentUserAgent.firmwareVersion",
+      if (eventData?.act == "MXT") {
+        // Not exclusive, but does filter out some unrelated WS messages
+        if (eventData.sel[0].typ == "Agent") {
+          // Agent event type (is an array, but should only be 1 index as all .dat should be of the same typ)
+          eventData.dat.forEach(async (agent) => {
+            if (agent.mdrServer?.publicId) {
+              // Agent is back online
+              let agentPubId = agent.publicId;
+              url = context.getApiUrl("Agent", {
+                publicId: agentPubId,
+                fields: "name,publicId,lastSeenAgentUserAgent.firmwareVersion",
+              });
+              response = await fetch(url, {
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization:
+                    "Bearer " + context.appData.accessToken.secretId,
+                  "Api-Application": context.appData.apiAppId,
+                  "Api-Company": context.appData.company.publicId,
+                  "Api-Version": "2",
+                },
+                method: "GET",
+              })
+                .then((res) => res.json())
+                .catch((error) => {
+                  console.error("Error:", error);
+                });
+
+              // New firmware is
+              let agentFirmwareNew =
+                response.data.lastSeenAgentUserAgent.firmwareVersion;
+              // Find old firmware
+              let indexInAgentsStatusStarted = agentsStatusStarted.findIndex(
+                (agentsStarted) => agentsStarted.publicId == agentPubId,
+              );
+
+              if (indexInAgentsStatusStarted !== -1) {
+                // Agent is from Started list
+                let agentDetails =
+                  agentsStatusStarted[indexInAgentsStatusStarted];
+                let agentFirmwareOld =
+                  agentDetails.lastSeenAgentUserAgent.firmwareVersion;
+
+                if (agentFirmwareNew != agentFirmwareOld) {
+                  // firmware installation succeeded
+                  let found = agentsStatusCompleted.find(
+                    (agent) => agent.pubId == agentPubId,
+                  );
+                  if (!found) {
+                    agentDetails.lastSeenAgentUserAgent.firmwareVersion =
+                      agentFirmwareNew;
+                    agentsStatusCompleted =
+                      agentsStatusCompleted.concat(agentDetails);
+                  }
+
+                  let agentInAgentsStatusStarted = agentsStatusStarted.find(
+                    (agentsStarted) => agentsStarted.publicId == agentPubId,
+                  );
+                  if (agentInAgentsStatusStarted) {
+                    agentsStatusStarted = agentsStatusStarted.filter(
+                      (m) => m !== agentInAgentsStatusStarted,
+                    );
+                    if (agentsStatusStarted.length == 0) {
+                      installingFirmware = false;
+                      disableFirmwareSelect = false;
+                      state = State.InstalledFirmware;
+
+                      if (agentsStatusCompleted.length != 0) {
+                        changeTableAgents(TableAgentsStatus.Completed);
+                      } else {
+                        changeTableAgents(TableAgentsStatus.Failed);
+                      }
+                      clearTimeout(timerWebsocketRenewal);
+                      activeWebsocketConn.close();
+                    }
+                  }
+                } else {
+                  // firmware installation failed
+                  let found = agentsStatusFailed.find(
+                    (agent) => agent.pubId == agentPubId,
+                  );
+                  if (!found) {
+                    agentsStatusFailed =
+                      agentsStatusFailed.concat(agentDetails);
+                  }
+
+                  let agentInAgentsStatusStarted = agentsStatusStarted.find(
+                    (agentsStarted) => agentsStarted.publicId == agentPubId,
+                  );
+                  if (agentInAgentsStatusStarted) {
+                    agentsStatusStarted = agentsStatusStarted.filter(
+                      (m) => m !== agentInAgentsStatusStarted,
+                    );
+                    if (agentsStatusStarted.length == 0) {
+                      installingFirmware = false;
+                      disableFirmwareSelect = false;
+                      state = State.InstalledFirmware;
+
+                      if (agentsStatusCompleted.length != 0) {
+                        changeTableAgents(TableAgentsStatus.Completed);
+                      } else {
+                        changeTableAgents(TableAgentsStatus.Failed);
+                      }
+                      clearTimeout(timerWebsocketRenewal);
+                      activeWebsocketConn.close();
+                    }
+                  }
+                }
+              }
+            }
           });
-          response = await fetch(url, {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: "Bearer " + context.appData.accessToken.secretId,
-              "Api-Application": context.appData.apiAppId,
-              "Api-Company": context.appData.company.publicId,
-              "Api-Version": "2",
-            },
-            method: "GET",
-          })
-            .then((res) => res.json())
-            .catch((error) => {
-              console.error("Error:", error);
-            });
-
-          // New firmware is
-          let agentFirmwareNew =
-            response.data.lastSeenAgentUserAgent.firmwareVersion;
-          // Find old firmware
-          let indexInAgentsStatusStarted = agentsStatusStarted.findIndex(
-            (agent) => agent.publicId == agentPubId,
-          );
-          let agentDetails = agentsStatusStarted[indexInAgentsStatusStarted];
-          let agentFirmwareOld =
-            agentDetails.lastSeenAgentUserAgent.firmwareVersion;
-
-          if (agentFirmwareNew != agentFirmwareOld) {
-            // firmware installation succeeded
-            let found = agentsStatusCompleted.find(
-              (agent) => agent.publicId == agentPubId,
-            );
-            if (!found) {
-              agentDetails.lastSeenAgentUserAgent.firmwareVersion =
-                agentFirmwareNew;
-              agentsStatusCompleted =
-                agentsStatusCompleted.concat(agentDetails);
-            }
-
-            let agentInAgentsStatusStarted = agentsStatusStarted.find(
-              (agent) => agent.publicId == agentPubId,
-            );
-            if (agentInAgentsStatusStarted) {
-              agentsStatusStarted = agentsStatusStarted.filter(
-                (m) => m !== agentInAgentsStatusStarted,
-              );
-              if (agentsStatusStarted.length == 0) {
-                installingFirmware = false;
-                disableFirmwareSelect = false;
-                state = State.InstalledFirmware;
-
-                if (agentsStatusCompleted.length != 0) {
-                  changeTableAgents(TableAgentsStatus.Completed);
-                } else {
-                  changeTableAgents(TableAgentsStatus.Failed);
-                }
-                clearTimeout(timerWebsocketRenewal);
-                activeWebsocketConn.close();
-              }
-            }
-          } else {
-            // firmware installation failed
-            let found = agentsStatusFailed.find(
-              (agent) => agent.publicId == agentPubId,
-            );
-            if (!found) {
-              agentsStatusFailed = agentsStatusFailed.concat(agentDetails);
-            }
-
-            let agentInAgentsStatusStarted = agentsStatusStarted.find(
-              (agent) => agent.publicId == agentPubId,
-            );
-            if (agentInAgentsStatusStarted) {
-              agentsStatusStarted = agentsStatusStarted.filter(
-                (m) => m !== agentInAgentsStatusStarted,
-              );
-              if (agentsStatusStarted.length == 0) {
-                installingFirmware = false;
-                disableFirmwareSelect = false;
-                state = State.InstalledFirmware;
-
-                if (agentsStatusCompleted.length != 0) {
-                  changeTableAgents(TableAgentsStatus.Completed);
-                } else {
-                  changeTableAgents(TableAgentsStatus.Failed);
-                }
-                clearTimeout(timerWebsocketRenewal);
-                activeWebsocketConn.close();
-              }
-            }
-          }
-        });
+        }
       }
     };
   }
