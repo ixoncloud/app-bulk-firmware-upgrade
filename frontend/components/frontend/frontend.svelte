@@ -393,6 +393,7 @@
         selectFirmwareButtonTextShort = "Select firmware";
         startInstallationButtonTextLong = "No firmware selected";
         startInstallationButtonTextShort = startInstallationButtonTextLong;
+        startInstallationButtonStyle = "startInstallationButtonStyleDisabled";
         break;
       case State.SearchingDevices:
         // Firmware selected, searching devices
