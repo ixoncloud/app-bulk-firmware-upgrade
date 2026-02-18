@@ -8,49 +8,40 @@ import datetime
 @FunctionContext.expose
 def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
     del kwargs
-    agent_type_names_ixrouter = '"IXrouter2","IXrouter3"' # Used as exact match (in)
-    agent_type_names_secureedge = '"SecureEdge"' # Used as partial match (contains)
-    agent_types = []
-    agent_types_sorted = []
+
+    # Get all agent types in the company
+    agent_list = []
     more_after = None
-    all_ixrouter_agent_types_checked = False
-    while all_ixrouter_agent_types_checked == False:
+    all_agents_checked = False
+    while all_agents_checked == False:
         response = context.api_client.get(
-            'AgentTypeList',
+            'AgentList',
             query={
                 'page-size': '1000',
                 'page-after': more_after,
-                'fields': 'publicId,name',
-                'filters': 'in(name,' + agent_type_names_ixrouter + ')'
-            }
-        )
-        agent_types = agent_types + response['data']
+                'fields': 'name,type.name,type.publicId',
+                'filters': ['isnotnull(lastSeenAgentUserAgent.firmwareVersion)']
+        })
+        agent_list = agent_list + response['data']
         more_after = response['moreAfter']
         if more_after is None:
-            all_ixrouter_agent_types_checked = True
+            all_agents_checked = True
             break
-    all_secureedge_agent_types_checked = False
-    while all_secureedge_agent_types_checked == False:
-        response = context.api_client.get(
-            'AgentTypeList',
-            query={
-                'page-size': '1000',
-                'page-after': more_after,
-                'fields': 'publicId,name',
-                'filters': 'contains(name,' + agent_type_names_secureedge + ')'
-            }
-        )
-        agent_types = agent_types + response['data']
-        more_after = response['moreAfter']
-        if more_after is None:
-            all_secureedge_agent_types_checked = True
-            break
-    latest_firmware_found_per_agent_type = []
-    today = date.today()
+    
+    agent_types = []
+    for agent in agent_list:
+        if not any(
+            item['publicId'] == agent['type']['publicId']
+            for item in agent_types
+        ):
+            agent_types.append({
+                'publicId': agent['type']['publicId'],
+                'name': agent['type']['name']
+                })
+
     # Get all firmware versions for agents
     firmware_list = []
     firmware_list_sorted = []
-    firmware_version_list_sorted = []
     firmware_release_dates_checked_per_agent_type = []
     firmware_overview = []
     for agent_type in agent_types:
@@ -72,47 +63,49 @@ def getFirmwareVersions(context: FunctionContext, **kwargs: dict[str, str]):
                 'latest':ixrouter_firmware_version['latest'],
                 'note': ixrouter_firmware_version['notes']
             })
-    # Sort version numbers naturally
-    for firmware in firmware_list:  # Make a list of version numbers only to enable natural sorting
-        firmware_version_list_sorted.append(firmware['version'])
-    firmware_version_list_sorted.sort(key=parseVersion, reverse=True)
-    # Create a sorted list of dictionaries of each version
-    for firmware_version in firmware_version_list_sorted:
-        # Find this firmware version's publicId and agent type publicId
-        for firmware in firmware_list:
-            if firmware['version'] == firmware_version:
-                # Skip version if it isn't latest of this agent type
-                if firmware['latest'] == False and firmware['agent_type_publicId'] not in latest_firmware_found_per_agent_type:
-                    continue
-                elif firmware['latest'] == True:
-                    latest_firmware_found_per_agent_type.append(firmware['agent_type_publicId'])
-
-                if firmware['agent_type_publicId'] in firmware_release_dates_checked_per_agent_type:
-                    firmware_allowed = True
-                    days_remaining = ''
-                else:
-                    firmware_release_date_text = search_dates(firmware['note'], languages=['en'])
-                    firmware_release_date_string = str(firmware_release_date_text[0][1])
-                    firmware_release_date = datetime.datetime.strptime(firmware_release_date_string, '%Y-%m-%d %H:%M:%S').date()
-                    date_delta = today - firmware_release_date
-                    days = int(date_delta.days)
-                    if days < 14:
-                        firmware_allowed = False
-                        days_remaining = 14 - days
-                    else:
-                        firmware_allowed = True
-                        days_remaining = ''
-                        firmware_release_dates_checked_per_agent_type.append(firmware['agent_type_publicId'])
-                firmware_list_sorted.append({
-                    'version': firmware['version'],
-                    'publicId':firmware['publicId'],
-                    'agent_type_publicId':firmware['agent_type_publicId'],
-                    'allowed':firmware_allowed,
-                    'days_remaining':days_remaining
-                })
     
-    # Sort agent_types
+    # Sort version numbers naturally
+    firmware_list.sort(
+        key=lambda item: parseVersion(item['version']),
+        reverse=True
+    )
+
+    latest_firmware_found_per_agent_type = []
+    today = date.today()
+    for firmware in firmware_list:
+        # Skip version if it isn't latest of this agent type
+        if firmware['latest'] == False and firmware['agent_type_publicId'] not in latest_firmware_found_per_agent_type:
+            continue
+        elif firmware['latest'] == True:
+            latest_firmware_found_per_agent_type.append(firmware['agent_type_publicId'])
+
+        if firmware['agent_type_publicId'] in firmware_release_dates_checked_per_agent_type:
+            firmware_allowed = True
+            days_remaining = ''
+        else:
+            firmware_release_date_text = search_dates(firmware['note'], languages=['en'])
+            firmware_release_date_string = str(firmware_release_date_text[0][1])
+            firmware_release_date = datetime.datetime.strptime(firmware_release_date_string, '%Y-%m-%d %H:%M:%S').date()
+            date_delta = today - firmware_release_date
+            days = int(date_delta.days)
+            if days < 14:
+                firmware_allowed = False
+                days_remaining = 14 - days
+            else:
+                firmware_allowed = True
+                days_remaining = ''
+                firmware_release_dates_checked_per_agent_type.append(firmware['agent_type_publicId'])
+        firmware_list_sorted.append({
+            'version': firmware['version'],
+            'publicId':firmware['publicId'],
+            'agent_type_publicId':firmware['agent_type_publicId'],
+            'allowed':firmware_allowed,
+            'days_remaining':days_remaining
+        })
+    
+    # Organize list
     agent_type_pubid_sorted = []
+    agent_types_sorted = []
     for firmware in firmware_list_sorted: # To make sure the agent type is also sorted
         for agent_type in agent_types: # Find agent type corresponding with firmware version
             if agent_type['publicId'] == firmware['agent_type_publicId']: # Agent type found
