@@ -184,7 +184,7 @@ def getRouters(context: FunctionContext, firmware, **kwargs: dict[str, str]):
                 'page-size': '1000',
                 'page-after': more_after,
                 'fields': 'publicId,name,serialNumber,type.name,type.publicId,lastSeenAgentUserAgent.firmwareVersion,mdrServer,memberships.group.publicId',
-                'filters': ['eq(type.publicId,"' + firmware['agent_type_publicId'] + '")', 'ne(lastSeenAgentUserAgent.firmwareVersion,"' + firmware['version'] + '")', 'isnotnull(mdrServer)']
+                'filters': ['eq(type.publicId,"' + firmware['agent_type_publicId'] + '")', 'ne(lastSeenAgentUserAgent.firmwareVersion,"' + firmware['version'] + '")', 'isnotnull(mdrServer)', 'eq(firmwareUpdateLocked,"false")']
         })
         agent_list = agent_list + response['data']
         more_after = response['moreAfter']
