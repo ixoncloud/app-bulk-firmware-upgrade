@@ -13,12 +13,14 @@
     "simulate": "cdk simulate"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
-    "@ixon-cdk/core": "^1.11.0",
-    "@ixon-cdk/runner": "^1.11.0",
-    "@ixon-cdk/simulator": "^1.11.0",
-    "@ixon-cdk/svelte-builder": "^1.11.0",
-    "@ixon-cdk/templates": "^1.11.0"
+    "@ixon-cdk/core": "^1.21.0",
+    "@ixon-cdk/runner": "^1.21.0",
+    "@ixon-cdk/simulator": "^1.21.0",
+    "@ixon-cdk/svelte-builder": "^1.27.0",
+    "@ixon-cdk/templates": "^1.21.0",
+    "@ixon-cdk/types": "^1.27.0",
+    "svelte": "^5.56.8"
   }
 }

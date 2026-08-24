@@ -2,15 +2,11 @@
   "$schema": "./node_modules/@ixon-cdk/core/config/schema.json",
   "prefix": "pct",
   "components": {
-    "frontend": {
+    "bulk-firmware-upgrade": {
       "runner": {
         "build": {
           "builder": "@ixon-cdk/svelte-builder:browser",
-          "input": "frontend.svelte"
-        },
-        "deploy": {
-          "company": "8040-7659-1181-9782-2274",
-          "template": "UAvf7vBjyL1m"
+          "input": "bulk-firmware-upgrade.svelte"
         }
       }
     }
