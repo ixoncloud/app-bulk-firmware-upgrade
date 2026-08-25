@@ -1,6 +1,6 @@
 {
   "main": "pct-bulk-firmware-upgrade.min.js",
-  "version": "26",
+  "version": "27",
   "sheetSettings": {
     "defaultCols": 6,
     "defaultRows": 6,
