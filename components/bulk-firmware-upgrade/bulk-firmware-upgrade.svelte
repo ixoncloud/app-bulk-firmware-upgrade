@@ -103,7 +103,6 @@
   const NARROW_WIDTH_PX = 580;
   const WIDE_COLUMNS_WIDTH_PX = 800; // Below this the Type and Groups columns are dropped.
   const TEXT_UPDATES_LOCKED = "Firmware updates are locked for this device.";
-  const NO_GROUP_ID = "\u0000no-group"; // Stands for "belongs to no group" in the group picker.
 
   // Reactive state
   let rootEl: HTMLElement | undefined = $state();
@@ -148,6 +147,9 @@
   let timerWebsocketRenewal: ReturnType<typeof setTimeout> | undefined;
   let timerInstallTimeout: ReturnType<typeof setTimeout> | undefined;
   let groupsLoaded: Promise<void> | null = null;
+  let websocketWarningShown = false;
+  // Public id -> why this device failed, for the CSV
+  let failureReasons = new Map<string, string>();
 
   // Status bar and dialog texts
 
@@ -155,14 +157,12 @@
     "After an installation has started, it usually takes 2 to 5 minutes for the installation to complete. Do not turn off or unplug the device during this period.\n\n";
   const TEXT_WEBSOCKET_ERROR =
     "Installation progression cannot be displayed because the WebSocket connection failed. Please contact your local IT to allow your browser's WebSocket connection for future uses of this app and in the meantime see the Portal or Fleet Manager for each device's connection status and firmware version.\n\n";
-  const TEXT_STARTED_AND_FAILED_DEVICES =
-    'A device is marked as "Failed" when its installation could not be started, when it does not come back online within 30 minutes, or when it comes back online still running its old firmware version.\n\n';
   const TEXT_FAILED_DEVICES =
     'Devices with status "Failed" have not been able to complete their firmware installation: the installation could not be started, the device did not come back online within 30 minutes, or it came back online still running its old firmware version.\n\n';
-  const TEXT_COMPLETED_DEVICES =
-    "The firmware was successfully installed on all devices.";
   const TEXT_SUPPORT_WEBSITE =
     'The "Firmware upgrade" article on our support website provides help with any unsuccessful firmware installations (support.ixon.cloud).';
+  const TEXT_EXPORT_RESULTS = "Export installation results as CSV";
+  const TEXT_BACK_TO_LIST = "Back to device list";
   const TEXT_NO_PERMISSION =
     "Your user cannot access, manage or update devices. Please, contact your administrator for assistance.";
 
@@ -317,6 +317,11 @@
     } else {
       setSelected(agent, selected);
     }
+    if (extendRange) {
+      // Shift-clicking also extends the browser's text selection, which paints
+      // the rows blue over the tick marks
+      window.getSelection()?.removeAllRanges();
+    }
     lastToggledIndex = index;
   }
 
@@ -399,42 +404,6 @@
     }
   });
 
-  // Contents of the dialog behind the info icon in the status bar.
-  const statusDialog = $derived.by(() => {
-    switch (uiState) {
-      case UiState.InstallingFirmware:
-        return {
-          title: "Installing firmware",
-          message:
-            TEXT_TIME_INDICATION +
-            TEXT_STARTED_AND_FAILED_DEVICES +
-            TEXT_SUPPORT_WEBSITE,
-        };
-      case UiState.InstalledFirmware:
-        return {
-          title: "Installations finished",
-          message:
-            agentsStatusFailed.length === 0
-              ? TEXT_COMPLETED_DEVICES
-              : TEXT_FAILED_DEVICES + TEXT_SUPPORT_WEBSITE,
-        };
-      case UiState.NoWebsocketStartingInstall:
-        return {
-          title: "Installing firmware",
-          message:
-            TEXT_TIME_INDICATION + TEXT_WEBSOCKET_ERROR + TEXT_SUPPORT_WEBSITE,
-        };
-      case UiState.NoWebsocketStartedInstall:
-        return {
-          title: "All installations have started",
-          message:
-            TEXT_TIME_INDICATION + TEXT_WEBSOCKET_ERROR + TEXT_SUPPORT_WEBSITE,
-        };
-      default:
-        return { title: "", message: "" };
-    }
-  });
-
   const installButtonStyling = $derived(
     installButtonEnabled
       ? "startInstallationButtonStyleEnabled"
@@ -484,11 +453,8 @@
   // Only groups that hold devices are offered.
   const groupOptions = $derived.by((): GroupOption[] => {
     const ids = new Set<string>();
-    let hasUngrouped = false;
     for (const agent of allAgents) {
-      const agentIds = agentGroupIds(agent);
-      if (agentIds.length === 0) hasUngrouped = true;
-      for (const id of agentIds) {
+      for (const id of agentGroupIds(agent)) {
         ids.add(id);
         // A parent is offered too: picking it covers its whole branch
         for (const parent of parentsOf(id)) ids.add(parent);
@@ -515,15 +481,6 @@
         a.label.localeCompare(b.label),
     );
 
-    if (hasUngrouped) {
-      options.push({
-        id: NO_GROUP_ID,
-        name: "No group",
-        typeName: "",
-        typeOrder: Number.MAX_SAFE_INTEGER,
-        label: "No group",
-      });
-    }
     return options;
   });
 
@@ -556,9 +513,9 @@
 
   function matchesGroupFilter(agent: Agent): boolean {
     if (selectedGroupIds.size === 0) return true;
-    const ids = agentGroupIds(agent);
-    if (ids.length === 0) return selectedGroupIds.has(NO_GROUP_ID);
-    return ids.some((id) => selectedGroupIdsWithChildren.has(id));
+    return agentGroupIds(agent).some((id) =>
+      selectedGroupIdsWithChildren.has(id),
+    );
   }
 
   // An inline dropdown: `openSelectPanel` only reports back on dismissal.
@@ -631,10 +588,7 @@
 
   // Group names of a device, most specific first.
   function agentGroupNames(agent: Agent): string {
-    const ids = agentGroupIds(agent);
-    const specific = ids.filter((id) => !companyGroupIds.has(id));
-    // The company group is only worth naming when it is all a device has
-    return (specific.length > 0 ? specific : ids)
+    return agentGroupIds(agent)
       .map((id) => ({ id, name: groupNamesById.get(id) || "" }))
       .filter((entry) => entry.name !== "")
       .sort(
@@ -786,6 +740,25 @@
     tableAgentsStatus = status;
   }
 
+  // Puts the whole fleet back on screen after a run. The chosen firmware is
+  // kept, so a second batch can be started without picking it again.
+  function backToDeviceList(): void {
+    tableAgentsStatus = null;
+    installTargets = [];
+    agentsStatusStarted = [];
+    agentsStatusCompleted = [];
+    agentsStatusFailed = [];
+    agentsStatusStartedBackup = [];
+    failureReasons = new Map();
+    selectedAgentIds.clear();
+    activeWebsocket = null;
+    activeWebsocketConn?.close();
+    clearTimeout(timerWebsocketRenewal);
+    clearTimeout(timerInstallTimeout);
+    allRequestsSent = false;
+    uiState = UiState.Ready;
+  }
+
   // API layer
   function apiHeaders(): Record<string, string> {
     return {
@@ -848,7 +821,27 @@
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`${routeName} failed (${response.status})`);
+      throw new Error(
+        `${routeName} failed (${response.status}${await apiErrorDetail(response)})`,
+      );
+    }
+  }
+
+  // What the API said about a rejected request, for the CSV. The body carries
+  // a message and often a list of field errors; both are worth keeping.
+  async function apiErrorDetail(response: Response): Promise<string> {
+    try {
+      const body = await response.json();
+      const parts: string[] = [];
+      if (typeof body?.message === "string") parts.push(body.message);
+      for (const issue of body?.errors ?? []) {
+        const field = issue?.field ? `${issue.field}: ` : "";
+        if (issue?.message) parts.push(`${field}${issue.message}`);
+      }
+      const detail = parts.join(" — ").replace(/\s+/g, " ").trim();
+      return detail ? `: ${detail}` : "";
+    } catch {
+      return "";
     }
   }
 
@@ -1269,12 +1262,16 @@
       .join(" / ");
   }
 
-  // The groups a device belongs to, ignoring its own per-device group.
+  // The groups a device belongs to. Its own per-device group is skipped, and
+  // so is the company group: it holds every device, so users do not read it
+  // as a group. Nothing offers it as a filter, "Clear filter" covers it.
   function agentGroupIds(agent: Agent): string[] {
     const ids: string[] = [];
     for (const membership of agent.memberships ?? []) {
       const id = membership.group?.publicId;
-      if (id && !deviceSpecificGroups.has(id)) ids.push(id);
+      if (!id || deviceSpecificGroups.has(id)) continue;
+      if (companyGroupIds.has(id)) continue;
+      ids.push(id);
     }
     return ids;
   }
@@ -1356,6 +1353,10 @@
       if (!fileId) {
         // Should not happen: the list only holds types that publish this version
         console.error("No firmware file for agent type", agentTypePublicId);
+        noteFailure(
+          agent,
+          `No firmware ${firmware.version} is published for ${agent.type?.name ?? "this device type"}`,
+        );
         rejected.push(agent);
         continue;
       }
@@ -1368,6 +1369,10 @@
         started.push(agent);
       } catch (error) {
         console.error("Error:", error);
+        noteFailure(
+          agent,
+          `The upgrade request was refused. ${error instanceof Error ? error.message : String(error)}`,
+        );
         rejected.push(agent);
       }
     }
@@ -1484,7 +1489,9 @@
       message:
         `Firmware ${firmware.version} will be installed on ${devices}. ` +
         "These devices will be restarted:\n\n" +
-        listed.join("\n"),
+        listed.join("\n") +
+        "\n\n" +
+        TEXT_TIME_INDICATION.trimEnd(),
       confirmButtonText: "Install",
       cancelButtonText: "Cancel",
       destructive: true,
@@ -1512,6 +1519,8 @@
     // A retry starts from a clean slate rather than adding to the last run
     agentsStatusCompleted = [];
     agentsStatusFailed = [];
+    failureReasons = new Map();
+    websocketWarningShown = false;
     activeWebsocketConn?.close();
     activeWebsocket = null;
 
@@ -1546,6 +1555,12 @@
     // Without a WebSocket nothing can be observed, so nothing can be concluded
     if (activeWebsocket !== true) return;
     if (agentsStatusStarted.length === 0) return;
+    for (const agent of agentsStatusStarted) {
+      noteFailure(
+        agent,
+        "The device did not come back online within 30 minutes of the request",
+      );
+    }
     agentsStatusFailed = agentsStatusFailed.concat(agentsStatusStarted);
     agentsStatusStarted = [];
     finishInstallationIfDone();
@@ -1556,7 +1571,16 @@
     if (!allRequestsSent) return;
     if (agentsStatusStarted.length !== 0) return;
     clearTimeout(timerInstallTimeout);
+    const alreadyFinished = uiState === UiState.InstalledFirmware;
     uiState = UiState.InstalledFirmware;
+    // A failure is worth interrupting for; a clean run speaks for itself
+    if (!alreadyFinished && agentsStatusFailed.length > 0) {
+      context.openAlertDialog({
+        title: "Installations finished",
+        message: TEXT_FAILED_DEVICES + TEXT_SUPPORT_WEBSITE,
+        buttonText: "I understand",
+      });
+    }
     showAgents(
       agentsStatusCompleted.length !== 0
         ? TableAgentsStatus.Completed
@@ -1617,6 +1641,12 @@
       }
       agentsStatusCompleted = agentsStatusCompleted.concat(started);
     } else if (!succeeded && !alreadyRecorded(agentsStatusFailed)) {
+      noteFailure(
+        started,
+        newVersion
+          ? `The device came back online still running firmware ${newVersion}`
+          : "The device came back online but reported no firmware version",
+      );
       agentsStatusFailed = agentsStatusFailed.concat(started);
     }
 
@@ -1642,6 +1672,15 @@
       if (!INSTALLING_STATES.includes(uiState)) return;
       uiState = UiState.NoWebsocketStartingInstall;
       agentsStatusStarted = agentsStatusStartedBackup;
+      // Progress cannot be reported from here on, so say so once
+      if (!websocketWarningShown) {
+        websocketWarningShown = true;
+        context.openAlertDialog({
+          title: "Installation progress cannot be shown",
+          message: TEXT_WEBSOCKET_ERROR + TEXT_SUPPORT_WEBSITE,
+          buttonText: "I understand",
+        });
+      }
     };
 
     conn.onopen = () => {
@@ -1686,6 +1725,10 @@
       uiState === UiState.NoWebsocketStartedInstall,
   );
 
+  function noteFailure(agent: Agent, reason: string): void {
+    failureReasons.set(agent.publicId, reason);
+  }
+
   function csvCell(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
   }
@@ -1693,7 +1736,15 @@
   // Saves the result of the run as a CSV.
   function exportResult(): void {
     const rows: string[][] = [
-      ["Name", "Serial number", "Type", "Groups", "Firmware", "Status"],
+      [
+        "Name",
+        "Serial number",
+        "Type",
+        "Groups",
+        "Firmware",
+        "Status",
+        "Error message",
+      ],
     ];
     const append = (agents: Agent[], status: string) => {
       for (const agent of agents) {
@@ -1701,9 +1752,10 @@
           agent.name ?? "",
           agent.serialNumber ?? "",
           agent.type?.name ?? "",
-          agentGroupNames(agent),
+          agentGroupNames(agent) || "-",
           agent.lastSeenAgentUserAgent?.firmwareVersion ?? "",
           status,
+          failureReasons.get(agent.publicId) ?? "",
         ]);
       }
     };
@@ -1717,14 +1769,6 @@
       csv,
       `firmware-upgrade-${selectedFirmware?.version ?? ""}-${stamp}.csv`,
     );
-  }
-
-  function informInstallationStatus(): void {
-    context.openAlertDialog({
-      title: statusDialog.title,
-      message: statusDialog.message,
-      buttonText: "I understand",
-    });
   }
 
   // Changing the version only changes eligibility, so drop ticks that no
@@ -1816,6 +1860,16 @@
       </div>
       <div class="hrTop"></div>
       <div class="searchRow">
+        {#if runFinished}
+          <button class="backButton" type="button" onclick={backToDeviceList}>
+            <svg class="backIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
+              />
+            </svg>
+            <span class="backLabel">{TEXT_BACK_TO_LIST}</span>
+          </button>
+        {/if}
         <div class="groupPicker" bind:this={groupPickerEl}>
           <button
             class="groupButton"
@@ -1987,7 +2041,7 @@
                     {agent.type?.name ?? ""}
                   </td>
                   <td class="columnGroups" use:cellTooltip>
-                    {agentGroupNames(agent)}
+                    {agentGroupNames(agent) || "-"}
                   </td>
                 {/if}
                 <td class="columnSerialNumber">
@@ -2021,34 +2075,26 @@
       <div class="statusWrapper">
         {#if showInstallingFirmwareStatus}
           <span class={spinnerRowStyling}>
-            <button
-              class="iconButton"
-              onclick={informInstallationStatus}
-              type="button"
-              aria-label="Show installation status details"
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24">
-                <path
-                  d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-18C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-                />
-                <path d="M11 9h2V7h-2v2zm0 8h2v-6h-2v6z" />
-              </svg>
-            </button>
-            <span class={statusTitleStyling}>
-              {statusLabel}
-            </span>
             {#if runFinished}
               <button
-                class="iconButton"
+                class="exportButton"
                 type="button"
                 onclick={exportResult}
-                aria-label="Export the result as a CSV file"
-                title="Export result"
+                aria-label={TEXT_EXPORT_RESULTS}
+                data-tooltip={TEXT_EXPORT_RESULTS}
+                use:cellTooltip
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="exportIcon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
                 </svg>
+                {#if !isNarrow}
+                  <span class="exportLabel">{TEXT_EXPORT_RESULTS}</span>
+                {/if}
               </button>
+            {:else}
+              <span class={statusTitleStyling}>
+                {statusLabel}
+              </span>
             {/if}
             {#if installing}
               <span class="spinnerSpacingLeftBottom">
@@ -2525,6 +2571,54 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .backButton {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 10px 0 6px;
+    border: 1px solid var(--bfu-border);
+    border-radius: 4px;
+    background-color: var(--bfu-surface);
+    color: var(--bfu-text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .backButton:hover {
+    background-color: var(--bfu-hover);
+  }
+
+  .backIcon {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  .exportButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 6px;
+    border: none;
+    border-radius: 20px;
+    background-color: transparent;
+    color: var(--bfu-text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .exportButton:hover {
+    background-color: var(--bfu-hover);
+  }
+
+  .exportIcon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
   }
 
   .groupPicker {
