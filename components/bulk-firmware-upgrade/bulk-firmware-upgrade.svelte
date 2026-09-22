@@ -35,7 +35,7 @@
     fileIdByAgentType: Record<string, string>;
     latest: boolean; // True for the newest version offered in this group.
     allowed: boolean; // False while the version is still inside its release cooldown.
-    daysRemaining: number | null; // Days left in the cooldown, or null when the version is selectable.
+    daysRemaining: number | null; // Days left in the cooldown; null when selectable, or when no release date was found.
   }
 
   // A firmware version before the cooldown rules have been applied.
@@ -44,6 +44,7 @@
     version: string;
     fileIdByAgentType: Record<string, string>;
     latest: boolean; // Flagged newest by at least one agent type in the group.
+    releaseDate: string | null; // The API's own date, when it has one.
     notes: string;
   }
 
@@ -730,8 +731,11 @@
     let label = firmware.version;
     if (firmware.latest) label += " (latest)";
     if (!firmware.allowed) {
-      const days = firmware.daysRemaining ?? 0;
-      label += ` — available in ${days} day${days === 1 ? "" : "s"}`;
+      const days = firmware.daysRemaining;
+      label +=
+        days === null
+          ? " — release date unknown"
+          : ` — available in ${days} day${days === 1 ? "" : "s"}`;
     }
     return label;
   }
@@ -904,8 +908,9 @@
     return 0;
   }
 
-  // Release date extraction. The API has no date field, so the date is read
-  // out of the free-text release notes. No date found means no cooldown.
+  // Release date extraction. The API's releaseDate is used when it has one;
+  // older files only carry a date in the free-text notes, so those are
+  // scanned as a fallback. No date at all means the version is not offered.
 
   const MONTH_NAMES: Record<string, number> = {
     jan: 1,
@@ -952,6 +957,15 @@
       date.getMonth() === month - 1 &&
       date.getDate() === day;
     return isRealDate ? date : null;
+  }
+
+  // The API's own release date: "2026-09-17", possibly with a time after it.
+  // Parsed by hand because `new Date("2026-09-17")` is UTC midnight, which
+  // lands on the previous day west of Greenwich.
+  function parseReleaseDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? makeDate(+match[1], +match[2], +match[3]) : null;
   }
 
   function findReleaseDate(notes: string): Date | null {
@@ -1056,7 +1070,7 @@
         const page = await apiGet<AgentTypeFile[]>("AgentTypeFileList", {
           publicId: agentTypePublicId,
           "page-size": PAGE_SIZE,
-          fields: "publicId,name,code,latest,notes",
+          fields: "publicId,name,code,latest,releaseDate,notes",
         });
         for (const file of page.data ?? []) {
           const version = file.code ?? "";
@@ -1069,6 +1083,7 @@
               version,
               fileIdByAgentType: {},
               latest: false,
+              releaseDate: null,
               notes: "",
             };
             byGroupAndVersion.set(key, candidate);
@@ -1076,6 +1091,9 @@
           }
           candidate.fileIdByAgentType[agentTypePublicId] = file.publicId;
           candidate.latest ||= file.latest ?? false;
+          // Cast: releaseDate is served but may not be in the CDK's typings yet
+          candidate.releaseDate ??=
+            (file as { releaseDate?: string | null }).releaseDate ?? null;
           if (!candidate.notes) candidate.notes = file.notes ?? "";
         }
       }
@@ -1104,13 +1122,21 @@
       let daysRemaining: number | null = null;
 
       if (!cooldownCleared.has(candidate.groupKey)) {
-        const releaseDate = findReleaseDate(candidate.notes);
-        const days = releaseDate ? daysBetween(releaseDate, today) : null;
-        if (days !== null && days < FIRMWARE_COOLDOWN_DAYS) {
+        const releaseDate =
+          parseReleaseDate(candidate.releaseDate) ??
+          findReleaseDate(candidate.notes);
+        if (releaseDate === null) {
+          // No date from either source: the cooldown cannot be shown to have
+          // passed, so the version is not offered
           allowed = false;
-          daysRemaining = FIRMWARE_COOLDOWN_DAYS - days;
         } else {
-          cooldownCleared.add(candidate.groupKey);
+          const days = daysBetween(releaseDate, today);
+          if (days < FIRMWARE_COOLDOWN_DAYS) {
+            allowed = false;
+            daysRemaining = FIRMWARE_COOLDOWN_DAYS - days;
+          } else {
+            cooldownCleared.add(candidate.groupKey);
+          }
         }
       }
 
@@ -1455,12 +1481,19 @@
 
   function informFirmwareNotAvailable(firmware: FirmwareOption): void {
     selectedFirmware = null;
+    const rule =
+      "Firmware versions become available for Bulk Firmware Upgrade 2 weeks " +
+      "after they are released. ";
     context.openAlertDialog({
       title: "Available soon",
       message:
-        "Firmware versions become available for Bulk Firmware Upgrade 2 weeks " +
-        `after they are released. Firmware ${firmware.version} becomes ` +
-        `available in ${firmware.daysRemaining} day(s).`,
+        firmware.daysRemaining === null
+          ? rule +
+            `The release date of firmware ${firmware.version} could not be ` +
+            "determined, so it cannot be installed from here."
+          : rule +
+            `Firmware ${firmware.version} becomes available in ` +
+            `${firmware.daysRemaining} day(s).`,
       buttonText: "I understand",
     });
   }
